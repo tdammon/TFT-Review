@@ -1,0 +1,150 @@
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: white;
+  background-color: #0a0a0a;
+  min-height: 100vh;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 70vh;
+  font-size: 1.5rem;
+  color: #ccc;
+}
+
+.error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 70vh;
+  font-size: 1.5rem;
+  color: #ff4444;
+  text-align: center;
+  padding: 2rem;
+}
+
+.videoHeader {
+  margin-bottom: 1.5rem;
+}
+
+.videoHeader h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.8rem;
+}
+
+.videoHeader p {
+  margin: 0 0 1rem 0;
+  color: #ccc;
+  line-height: 1.5;
+}
+
+.videoMeta {
+  display: flex;
+  gap: 1.5rem;
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.videoSection {
+  margin-bottom: 2rem;
+}
+
+.videoPlayer {
+  width: 100%;
+  max-height: 70vh;
+  background-color: #000;
+  border-radius: 8px;
+}
+
+.videoControls {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.controlButton {
+  padding: 0.5rem 1rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.controlButton:hover {
+  background: #3a3a3a;
+  transform: translateY(-1px);
+}
+
+.commentSection {
+  background: #1a1a1a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.addComment {
+  margin: 1rem 0;
+}
+
+.commentInput {
+  width: 100%;
+  min-height: 80px;
+  padding: 0.75rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: white;
+  margin-bottom: 1rem;
+  resize: vertical;
+}
+
+.addCommentButton {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(45deg, #4a90e2, #357abd);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.addCommentButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+}
+
+.commentList {
+  margin-top: 2rem;
+}
+
+.commentItem {
+  padding: 1rem;
+  background: #2a2a2a;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.commentHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.author {
+  font-weight: 500;
+  color: #4a90e2;
+}
+
+.commentText {
+  margin: 0;
+  line-height: 1.5;
+}
