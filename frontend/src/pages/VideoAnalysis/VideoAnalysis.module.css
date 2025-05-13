@@ -51,6 +51,14 @@
 
 .videoSection {
   margin-bottom: 2rem;
+  position: relative;
+}
+
+.videoPlayerContainer {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .videoPlayer {
@@ -58,6 +66,285 @@
   max-height: 70vh;
   background-color: #000;
   border-radius: 8px;
+  display: block;
+}
+
+/* Fullscreen container styling */
+.fullscreenContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: #000;
+  border-radius: 0;
+}
+
+.fullscreenContainer .videoPlayer {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+}
+
+/* Custom video controls */
+.customControls {
+  position: absolute;
+  bottom: 70px; /* Position above the native controls */
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 25;
+  opacity: 0.9;
+  transition: opacity 0.3s;
+}
+
+.customControls:hover {
+  opacity: 1;
+}
+
+.fullscreenButton {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreenButton:hover {
+  background: rgba(0, 0, 0, 0.9);
+  border-color: rgba(255, 255, 255, 0.7);
+  transform: translateY(-2px);
+}
+
+/* Inline Comment Overlay */
+.commentOverlay {
+  position: absolute;
+  top: 20px;
+  left: 80px;
+  width: 600px;
+  max-width: calc(
+    100% - 100px
+  ); /* Ensure it doesn't overflow on small screens */
+  background: rgba(26, 26, 26, 0.95);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(74, 144, 226, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 35;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.fullscreenContainer .commentOverlay {
+  top: 30px;
+  left: 100px;
+  max-width: calc(100% - 130px);
+}
+
+.inlineCommentHeader {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #4a90e2;
+}
+
+.inlineCommentInput {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  background: rgba(42, 42, 42, 0.8);
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: white;
+  margin-bottom: 8px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.inlineCommentActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inlineCancelButton {
+  padding: 6px 12px;
+  background: transparent;
+  color: #ccc;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.inlineCancelButton:hover {
+  background: #2a2a2a;
+  color: white;
+}
+
+.inlineAddButton {
+  padding: 6px 12px;
+  background: linear-gradient(45deg, #4a90e2, #357abd);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.inlineAddButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+}
+
+/* Add Comment Button Overlay */
+.addCommentOverlay {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(74, 144, 226, 0.9);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 30; /* Increased z-index to ensure it's on top */
+  transition: all 0.2s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  padding: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
+  }
+}
+
+.addCommentOverlay svg {
+  width: 28px;
+  height: 28px;
+}
+
+.addCommentOverlay:hover {
+  background: rgba(74, 144, 226, 1);
+  transform: scale(1.1);
+  animation: none; /* Stop the pulse animation on hover */
+}
+
+/* Fullscreen specific comment overlay */
+.fullscreenContainer .addCommentOverlay {
+  top: 30px;
+  left: 30px;
+  width: 60px;
+  height: 60px;
+}
+
+.fullscreenContainer .addCommentOverlay svg {
+  width: 32px;
+  height: 32px;
+}
+
+/* Floating Comment Input */
+.floatingCommentInput {
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: slideIn 0.3s ease-out;
+  border: 2px solid rgba(74, 144, 226, 0.5);
+}
+
+/* Fullscreen comment input */
+.fullscreenCommentInput {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  max-width: 600px;
+  z-index: 10000;
+  background: rgba(26, 26, 26, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(74, 144, 226, 0.7);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -55%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* Regular comment input animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.floatingCommentHeader {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+  color: #4a90e2;
+}
+
+.floatingCommentActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.cancelButton {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #ccc;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: #2a2a2a;
+  color: white;
 }
 
 .videoControls {
@@ -100,8 +387,10 @@
   border: 1px solid #444;
   border-radius: 4px;
   color: white;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   resize: vertical;
+  font-family: inherit;
+  font-size: 1rem;
 }
 
 .addCommentButton {
@@ -134,9 +423,8 @@
 .commentHeader {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 0.5rem;
-  color: #999;
-  font-size: 0.9rem;
 }
 
 .author {
@@ -144,7 +432,86 @@
   color: #4a90e2;
 }
 
+.timestampButton {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #ccc;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timestampButton:hover {
+  background: #3a3a3a;
+  color: white;
+  border-color: #4a90e2;
+}
+
 .commentText {
   margin: 0;
   line-height: 1.5;
+}
+
+.noComments {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-style: italic;
+}
+
+/* Hide native fullscreen button */
+.videoPlayer::-webkit-media-controls-fullscreen-button {
+  display: none !important;
+}
+
+/* Firefox */
+.videoPlayer::-moz-fullscreen-button {
+  display: none !important;
+}
+
+/* Standard - future compatibility */
+.videoPlayer::--fullscreen-button {
+  display: none !important;
+}
+
+.buttonText {
+  margin-left: 6px;
+}
+
+.fullscreenNotice {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 15px 25px;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  animation: fadeInOut 1.5s ease-in-out;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
 }
