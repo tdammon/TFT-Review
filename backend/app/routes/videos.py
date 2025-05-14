@@ -115,13 +115,31 @@ async def get_video(
         raise HTTPException(status_code=403, detail="You don't have access to this video")
     
     # Get comments for this video
-    comments = db.query(Comment).filter(Comment.video_id == video_id).all()
-    video_data = VideoResponse.from_orm(video)
+    # comments = db.query(Comment).filter(Comment.video_id == video_id).all()
+    comments = db.query(Comment).options(joinedload(Comment.user)).filter(Comment.video_id == video_id).all()
+    comment_responses = []
+    for comment in comments:
+      # Get the username from the user relationship
+      user_username = comment.user.username if comment.user else "Unknown"
+      user_profile_picture = comment.user.profile_picture if comment.user else None
     
+      # Create a CommentResponse object
+      comment_response = CommentResponse(
+        id=comment.id,
+        content=comment.content,
+        user_username=user_username,
+        user_profile_picture=user_profile_picture,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+        parent_id=comment.parent_id,
+        video_timestamp=comment.video_timestamp
+      )
+      comment_responses.append(comment_response)
+    video_data = VideoResponse.from_orm(video)
     # Create the detailed response with comments
     return VideoDetailResponse(
-        **video_data.dict(),
-        comments=comments
+        **video_data.model_dump(),
+        comments=comment_responses
     )
 
 @router.delete("/{video_id}", status_code=204)

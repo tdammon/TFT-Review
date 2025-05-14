@@ -36,5 +36,6 @@ class CommentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     parent_id: Optional[int] = None  # ID of the parent comment (for nested comments)
+    video_timestamp: float # Timestamp in the video where the comment refers to
     class Config:
         from_attributes = True

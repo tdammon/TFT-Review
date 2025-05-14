@@ -27,6 +27,7 @@ interface VideoDetails {
   views: number;
   user_id: number;
   created_at: string;
+  comments: Comment[];
 }
 
 const VideoAnalysis = () => {
@@ -59,7 +60,7 @@ const VideoAnalysis = () => {
           throw new Error("Authentication failed");
         }
 
-        // Fetch video details
+        // Fetch video details (now includes comments)
         const detailsResponse = await api.get(`/api/v1/videos/${videoId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -67,6 +68,11 @@ const VideoAnalysis = () => {
         });
 
         setVideoDetails(detailsResponse.data);
+
+        // Set comments from the video details response
+        if (detailsResponse.data.comments) {
+          setComments(detailsResponse.data.comments);
+        }
 
         // Fetch streaming URL
         const streamResponse = await api.get(
@@ -80,14 +86,8 @@ const VideoAnalysis = () => {
 
         setVideoUrl(streamResponse.data.url);
 
-        // Fetch comments for this video
-        const commentsResponse = await api.get(`/api/v1/comments/${videoId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        setComments(commentsResponse.data);
+        // No need to fetch comments separately anymore
+        // Comments are now included in the video details response
       } catch (err: any) {
         console.error("Error fetching video:", err);
         setError(err.response?.data?.detail || "Failed to load video");
@@ -168,7 +168,17 @@ const VideoAnalysis = () => {
       );
 
       // Add the new comment to the list
-      setComments((prev) => [response.data, ...prev]);
+      const newCommentData = response.data;
+      setComments((prev) => [newCommentData, ...prev]);
+
+      // Also update the comments in videoDetails if it exists
+      if (videoDetails && videoDetails.comments) {
+        setVideoDetails({
+          ...videoDetails,
+          comments: [newCommentData, ...videoDetails.comments],
+        });
+      }
+
       setNewComment("");
       setShowCommentInput(false);
     } catch (err: any) {
@@ -195,7 +205,7 @@ const VideoAnalysis = () => {
   const jumpToTimestamp = (timestamp: number) => {
     if (videoRef.current) {
       videoRef.current.currentTime = timestamp;
-      videoRef.current.play();
+      videoRef.current.pause();
     }
   };
 
