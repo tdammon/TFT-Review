@@ -5,6 +5,7 @@ from jose import jwt
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import time
 import datetime
+import uuid
 
 from ..db.database import get_db
 from ..models.user import User

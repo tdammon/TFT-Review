@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, ARRAY, Enum as SQLAlchemyEnum, Text
+from sqlalchemy import Column, String, ForeignKey, ARRAY, Enum as SQLAlchemyEnum, Text, Integer
 from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy.dialects.postgresql import UUID
 from typing import List, Optional, TYPE_CHECKING
 
 from .base import Base
@@ -16,8 +17,8 @@ class VideoVisibility(str, Enum):
     PRIVATE = "private"
 
 class Video(Base):
-    id: Mapped[int] = Column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = Column(Integer, ForeignKey("user.id"))
+    id: Mapped[str] = Column(UUID(as_uuid=True), primary_key=True, index=True, default=Base.generate_uuid)
+    user_id: Mapped[str] = Column(UUID(as_uuid=True), ForeignKey("user.id"))
     
     # Basic info
     title: Mapped[str] = Column(String(100), nullable=False)

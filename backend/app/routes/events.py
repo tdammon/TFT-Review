@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import uuid
 
 from ..models.event import Event
 from ..models.video import Video
@@ -16,7 +17,7 @@ router = APIRouter(
 
 @router.get("/{video_id}", response_model=List[EventResponse])
 async def get_events(
-    video_id: int,
+    video_id: uuid.UUID,
     db: Session = Depends(get_db)
 ):
     """Get all events for a video"""
@@ -52,7 +53,7 @@ async def create_event(
 
 @router.patch("/{event_id}", response_model=EventResponse)
 async def update_event(
-    event_id: int,
+    event_id: uuid.UUID,
     event_data: EventUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -74,7 +75,7 @@ async def update_event(
 
 @router.delete("/{event_id}", status_code=204)
 async def delete_event(
-    event_id: int,
+    event_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

@@ -28,7 +28,7 @@ const OnboardingPage = () => {
 
       console.log("Token obtained successfully for onboarding");
 
-      await api.post(
+      const response = await api.post(
         "/api/v1/users/complete-onboarding",
         { username },
         {
@@ -38,8 +38,13 @@ const OnboardingPage = () => {
         }
       );
 
-      // Redirect or update state after successful onboarding
-      navigate("/");
+      console.log("Onboarding completed successfully:", response.data);
+
+      // Force a full page reload to ensure state is refreshed
+      window.location.href = "/";
+
+      // The navigate function below won't be reached due to the page reload
+      // navigate("/");
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
       setError("Failed to complete onboarding. Please try again.");

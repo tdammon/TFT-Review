@@ -8,31 +8,31 @@ import { FullscreenIcon } from "../../components/Icons/FullScreenIcon";
 import { ExitFullscreenIcon } from "../../components/Icons/ExitFullScreenIcon";
 
 interface Comment {
-  id: number;
+  id: string;
   content: string;
   video_timestamp: number;
   user_username: string;
   user_profile_picture?: string;
   created_at: string;
   updated_at: string;
-  parent_id?: number;
+  parent_id?: string;
 }
 
 interface VideoDetails {
-  id: number;
+  id: string;
   title: string;
   description: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
   views: number;
-  user_id: number;
+  user_id: string;
   created_at: string;
   comments: Comment[];
 }
 
 interface User {
   discord_connected: boolean;
-  id: number;
+  id: string;
   username: string;
   email: string;
   profile_picture: string;
@@ -174,7 +174,7 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
         "/api/v1/comments/",
         {
           content: newComment,
-          video_id: parseInt(videoId),
+          video_id: videoId,
           parent_id: null, // This is a top-level comment
           video_timestamp: commentTimestamp,
         },

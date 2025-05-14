@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
+import uuid
 
 class UserBase(BaseModel):
     """Base user attributes shared across schemas"""
@@ -12,8 +13,8 @@ class UserCreate(UserBase):
     pass  # Just email and auth0_id from Auth0
 
 class UserUpdate(BaseModel):
-    """Schema for updating an existing user"""
-    username: Optional[str] = Field(None, min_length=3, max_length=50)  # Set during onboarding
+    """Schema for updating user information"""
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
     profile_picture: Optional[str] = None
     riot_id: Optional[str] = Field(None, max_length=100)
     riot_puuid: Optional[str] = Field(None, max_length=100)
@@ -22,8 +23,8 @@ class UserUpdate(BaseModel):
 
 class UserInDB(UserBase):
     """Schema for user as stored in database"""
-    id: int
-    username: Optional[str] = Field(None, min_length=3, max_length=50)  # Can be null initially
+    id: uuid.UUID
+    username: Optional[str] = None
     profile_picture: Optional[str] = None
     riot_id: Optional[str] = None
     riot_puuid: Optional[str] = None
@@ -38,10 +39,13 @@ class UserInDB(UserBase):
         from_attributes = True
 
 class UserResponse(BaseModel):
-    """Schema for user responses (public profile)"""
-    id: int
-    email: EmailStr
-    username: Optional[str]  # Might be null if they haven't set it yet
+    """Schema for user responses"""
+    id: uuid.UUID
+    username: Optional[str] = None
+    email: str
     profile_picture: Optional[str] = None
-    verified_riot_account: bool
-    discord_connected: bool 
+    verified_riot_account: bool = False
+    discord_connected: bool = False
+
+    class Config:
+        from_attributes = True 

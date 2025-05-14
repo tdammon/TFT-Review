@@ -2,7 +2,9 @@ from pydantic import BaseModel, Field, HttpUrl
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+import uuid
 from .comment import CommentResponse
+from .event import EventResponse
 
 class VideoVisibility(str, Enum):
     PUBLIC = "public"
@@ -30,8 +32,8 @@ class VideoUpdate(BaseModel):
 
 class VideoInDB(VideoBase):
     """Schema for video as stored in database"""
-    id: int
-    user_id: int
+    id: uuid.UUID
+    user_id: uuid.UUID
     file_path: str
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
@@ -49,7 +51,7 @@ class VideoInDB(VideoBase):
 
 class VideoResponse(BaseModel):
     """Schema for video responses"""
-    id: int
+    id: uuid.UUID
     title: str
     description: Optional[str] = None
     file_path: Optional[str] = None
@@ -60,7 +62,7 @@ class VideoResponse(BaseModel):
     rank: Optional[str] = None
     result: Optional[str] = None
     views: int
-    user_id: int
+    user_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
 
@@ -68,8 +70,9 @@ class VideoResponse(BaseModel):
         from_attributes = True
 
 class VideoDetailResponse(VideoResponse):
-    """Schema for detailed video responses including comments"""
+    """Schema for detailed video responses including comments and events"""
     comments: List[CommentResponse] = []
+    events: List[EventResponse] = []
 
     class Config:
         from_attributes = True

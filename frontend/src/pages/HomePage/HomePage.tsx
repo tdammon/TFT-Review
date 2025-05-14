@@ -5,17 +5,17 @@ import api from "../../api/axios";
 import { useAuthToken } from "../../utils/auth";
 
 interface Video {
-  id: number;
+  id: string;
   title: string;
   thumbnail_url: string | null;
   views: number;
-  user_id: number;
+  user_id: string;
   created_at: string;
 }
 
 interface User {
   discord_connected: boolean;
-  id: number;
+  id: string;
   username: string;
   email: string;
   profile_picture: string;

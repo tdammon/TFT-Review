@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, String, Boolean
 from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy.dialects.postgresql import UUID
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -14,7 +15,7 @@ class User(Base):
     User model for storing user information and authentication details.
 
     Attributes:
-        id (int): Primary key for the user
+        id (UUID): Primary key for the user
         auth0_id (str): Unique identifier from Auth0
         email (str): User's email address
         video (List[Video]): List of videos uploaded by the user
@@ -27,7 +28,7 @@ class User(Base):
         discord_connected (bool): Indicates if Discord account is connected
     """
 
-    id: Mapped[int] = Column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = Column(UUID(as_uuid=True), primary_key=True, index=True, default=Base.generate_uuid)
     auth0_id: Mapped[str] = Column(String(100), unique=True, index=True, nullable=False)
     email: Mapped[str] = Column(String(255), unique=True, index=True, nullable=False)
     username: Mapped[str] = Column(String(50), unique=True, index=True, nullable=True)
