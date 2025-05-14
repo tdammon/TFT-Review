@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 import os
-from app.routes import users_router, videos_router, comments_router
+from app.routes import users_router, videos_router, comments_router, events_router
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from app.auth import AuthMiddleware
@@ -47,6 +47,7 @@ def test_db(db: Session = Depends(get_db)):
 app.include_router(videos_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(comments_router, prefix="/api/v1")
+app.include_router(events_router, prefix="/api/v1")
 
 # Add error handlers
 @app.exception_handler(RequestValidationError)

@@ -1,0 +1,92 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
+
+from ..models.event import Event
+from ..models.video import Video
+from ..models.user import User
+from ..schemas.event import EventResponse, EventCreate, EventUpdate
+from ..db.database import get_db
+from ..auth import get_current_user
+
+router = APIRouter(
+    prefix="/events", 
+    tags=["events"]
+)
+
+@router.get("/{video_id}", response_model=List[EventResponse])
+async def get_events(
+    video_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all events for a video"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    events = db.query(Event).filter(Event.video_id == video_id).order_by(Event.created_at.desc()).all()
+    return events
+
+@router.post("/", response_model=EventResponse)
+async def create_event(
+    event_data: EventCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new event"""
+    video = db.query(Video).filter(Video.id == event_data.video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    if video.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized to create event for this video")
+    
+    event = Event(
+        **event_data.model_dump(),
+        user_id=current_user.id
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+@router.patch("/{event_id}", response_model=EventResponse)
+async def update_event(
+    event_id: int,
+    event_data: EventUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an event"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    if not event.user_id == current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized to update this event")
+    
+    for key, value in event_data.model_dump(exclude_unset=True).items():
+        setattr(event, key, value)
+    
+    db.commit()
+    db.refresh(event)
+    return event
+
+@router.delete("/{event_id}", status_code=204)
+async def delete_event(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete an event"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    if not event.user_id == current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized to delete this event")
+    
+    db.delete(event)
+    db.commit()
+    return {"message": "Event deleted successfully"}
+        

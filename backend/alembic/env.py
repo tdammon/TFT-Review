@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.models.base import Base
 from app.models.user import User
 from app.models.video import Video
+from app.models.event import Event
+from app.models.comment import Comment
 
 # Load environment variables
 load_dotenv()

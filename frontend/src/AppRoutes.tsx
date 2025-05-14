@@ -10,11 +10,21 @@ import AuthLayout from "./layouts/AuthLayout";
 import { useAuthToken } from "./utils/auth";
 import api from "./api/axios";
 
+interface User {
+  discord_connected: boolean;
+  id: number;
+  username: string;
+  email: string;
+  profile_picture: string;
+  verified_riot_account: boolean;
+}
+
 const AppRoutes = () => {
   const { isAuthenticated, isLoading } = useAuth0();
   const { getToken } = useAuthToken();
   const [hasUsername, setHasUsername] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(true);
+  const [userInfo, setUserInfo] = useState<User | null>(null);
 
   useEffect(() => {
     const checkUsername = async () => {
@@ -26,9 +36,6 @@ const AppRoutes = () => {
             throw new Error("Access token is undefined");
           }
 
-          console.log("Token obtained successfully");
-          console.log("Checking username at:", new Date().toISOString());
-
           // Use axios instance with proper baseURL
           const response = await api.get("/api/v1/users/me", {
             headers: {
@@ -36,8 +43,7 @@ const AppRoutes = () => {
             },
           });
 
-          console.log("Response status:", response.status);
-          console.log("Response data:", response.data);
+          setUserInfo(response.data);
 
           // Check if username exists and is not a temporary username
           const username = response.data.username;
@@ -59,7 +65,7 @@ const AppRoutes = () => {
     };
 
     checkUsername();
-  }, [isAuthenticated, getToken]);
+  }, [isAuthenticated]);
 
   if (isLoading || checkingUsername) {
     return <LoadingScreen />;
@@ -69,20 +75,38 @@ const AppRoutes = () => {
     return <LoginPage />;
   }
 
-  // If authenticated but no username, show onboarding
-  if (hasUsername === false) {
-    return <OnboardingPage />;
-  }
-
   // Only show main app routes if user has completed onboarding
   if (hasUsername === true) {
     return (
       <Routes>
         <Route element={<AuthLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/video/:videoId" element={<VideoAnalysis />} />
+          {userInfo && (
+            <Route path="/" element={<HomePage userInfo={userInfo} />} />
+          )}
+          <Route
+            path="/video/:videoId"
+            element={<VideoAnalysis userInfo={userInfo} />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
+
+  // If authenticated but no username, show onboarding
+  if (hasUsername === false) {
+    return <OnboardingPage />;
+  }
+
+  // Public routes accessible without authentication
+  if (!isAuthenticated) {
+    return (
+      <Routes>
+        <Route
+          path="/video/:videoId"
+          element={<VideoAnalysis userInfo={null} />}
+        />
+        <Route path="*" element={<LoginPage />} />
       </Routes>
     );
   }

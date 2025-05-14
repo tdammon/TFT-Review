@@ -9,7 +9,7 @@ from enum import Enum
 if TYPE_CHECKING:
     from .user import User
     from .comment import Comment
-
+    from .event import Event
 
 class VideoVisibility(str, Enum):
     PUBLIC = "public"
@@ -42,6 +42,7 @@ class Video(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="videos")
     comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="video", cascade="all, delete-orphan")
+    events: Mapped[List["Event"]] = relationship("Event", back_populates="video", cascade="all, delete-orphan")
     
     
     

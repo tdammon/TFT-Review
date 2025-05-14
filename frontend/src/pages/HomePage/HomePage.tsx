@@ -13,7 +13,16 @@ interface Video {
   created_at: string;
 }
 
-const HomePage = () => {
+interface User {
+  discord_connected: boolean;
+  id: number;
+  username: string;
+  email: string;
+  profile_picture: string;
+  verified_riot_account: boolean;
+}
+
+const HomePage = ({ userInfo }: { userInfo: User }) => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [filter, setFilter] = useState<string>("recent");
   const [isLoading, setIsLoading] = useState<boolean>(true);

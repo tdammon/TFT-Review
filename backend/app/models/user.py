@@ -5,7 +5,7 @@ from typing import List, TYPE_CHECKING
 if TYPE_CHECKING:
     from .video import Video
     from .comment import Comment
-
+    from .event import Event
 from .base import Base
 
 
@@ -45,3 +45,4 @@ class User(Base):
 
     videos: Mapped[List["Video"]] = relationship("Video", back_populates="user")
     comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="user")
+    events: Mapped[List["Event"]] = relationship("Event", back_populates="user")
