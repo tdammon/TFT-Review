@@ -82,12 +82,19 @@ async def get_videos(
     print('running')
     """Get a list of videos accessible to the current user"""
     # Get public videos and user's own videos
-    videos = db.query(Video).filter(
+    videos = db.query(Video).options(joinedload(Video.user)).filter(
         (Video.visibility == VideoVisibility.PUBLIC) | 
         (Video.user_id == current_user.id)
     ).offset(skip).limit(limit).all()
     
-    return videos
+    # Add username to each video
+    video_responses = []
+    for video in videos:
+        video_dict = VideoResponse.model_validate(video).model_dump()
+        video_dict["user_username"] = video.user.username if video.user else "Unknown"
+        video_responses.append(VideoResponse.model_validate(video_dict))
+    
+    return video_responses
 
 @router.get("/my-videos", response_model=List[VideoResponse])
 async def get_my_videos(
@@ -98,7 +105,15 @@ async def get_my_videos(
 ):
     """Get videos uploaded by the current user"""
     videos = db.query(Video).filter(Video.user_id == current_user.id).offset(skip).limit(limit).all()
-    return videos
+    
+    # Add username to each video
+    video_responses = []
+    for video in videos:
+        video_dict = VideoResponse.model_validate(video).model_dump()
+        video_dict["user_username"] = current_user.username
+        video_responses.append(VideoResponse.model_validate(video_dict))
+    
+    return video_responses
 
 @router.get("/{video_id}", response_model=VideoDetailResponse)
 async def get_video(
@@ -107,7 +122,7 @@ async def get_video(
     db: Session = Depends(get_db)
 ):
     """Get a specific video by ID with its comments and events"""
-    video = db.query(Video).filter(Video.id == video_id).first()
+    video = db.query(Video).options(joinedload(Video.user)).filter(Video.id == video_id).first()
     
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -139,7 +154,7 @@ async def get_video(
       comment_responses.append(comment_response)
     
     # Get events for this video
-    events = db.query(Event).options(joinedload(Event.user)).filter(Event.video_id == video_id).all()
+    events = db.query(Event).options(joinedload(Event.user)).filter(Event.video_id == video_id).order_by(Event.video_timestamp.asc()).all()
     event_responses = []
     for event in events:
       # Get the username from the user relationship
@@ -150,6 +165,10 @@ async def get_video(
       event_response = EventResponse(
         id=event.id,
         title=event.title,
+        description=event.description,
+        event_type=event.event_type,
+        user_id=event.user_id,
+        video_id=event.video_id,
         user_username=user_username,
         user_profile_picture=user_profile_picture,
         created_at=event.created_at,
@@ -158,7 +177,11 @@ async def get_video(
       )
       event_responses.append(event_response)
     
-    video_data = VideoResponse.from_orm(video)
+    # Create video response with username
+    video_dict = VideoResponse.model_validate(video).model_dump()
+    video_dict["user_username"] = video.user.username if video.user else "Unknown"
+    video_data = VideoResponse.model_validate(video_dict)
+    
     # Create the detailed response with comments and events
     return VideoDetailResponse(
         **video_data.model_dump(),

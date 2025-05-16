@@ -63,6 +63,7 @@ class VideoResponse(BaseModel):
     result: Optional[str] = None
     views: int
     user_id: uuid.UUID
+    user_username: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

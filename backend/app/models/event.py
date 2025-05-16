@@ -17,6 +17,8 @@ class Event(Base):
     video_id: Mapped[str] = Column(UUID(as_uuid=True), ForeignKey("video.id"))
     video_timestamp: Mapped[float] = Column(Float, nullable=False)
     title: Mapped[str] = Column(String(100), nullable=False)
+    description: Mapped[str] = Column(String(500), nullable=True)
+    event_type: Mapped[str] = Column(String(50), nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="events")

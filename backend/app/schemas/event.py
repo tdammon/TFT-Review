@@ -7,9 +7,8 @@ class EventBase(BaseModel):
     """Base event attributes"""
     title: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    video_timestamp: int = Field(..., ge=0)  # Timestamp in seconds
-    event_type: str = Field(..., min_length=1, max_length=50)
-    tags: Optional[List[str]] = None
+    video_timestamp: float = Field(..., ge=0.1)  # Timestamp in seconds, minimum 0.1s
+    event_type: Optional[str] = Field(None, min_length=1, max_length=50)
 
 class EventCreate(EventBase):
     """Schema for creating a new event"""
@@ -19,9 +18,8 @@ class EventUpdate(BaseModel):
     """Schema for updating event"""
     title: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
-    video_timestamp: Optional[int] = Field(None, ge=0)
+    video_timestamp: float = Field(None, ge=0.1)  # Minimum 0.1s
     event_type: Optional[str] = Field(None, min_length=1, max_length=50)
-    tags: Optional[List[str]] = None
 
 class EventInDB(EventBase):
     """Schema for event as stored in database"""
@@ -39,11 +37,12 @@ class EventResponse(BaseModel):
     id: uuid.UUID
     title: str
     description: Optional[str] = None
-    video_timestamp: int
-    event_type: str
-    tags: Optional[List[str]] = None
+    video_timestamp: float
+    event_type: Optional[str] = None
     user_id: uuid.UUID
     video_id: uuid.UUID
+    user_username: str
+    user_profile_picture: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

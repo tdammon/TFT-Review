@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 import uuid
 
@@ -25,8 +25,27 @@ async def get_events(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    events = db.query(Event).filter(Event.video_id == video_id).order_by(Event.created_at.desc()).all()
-    return events
+    events = db.query(Event).options(joinedload(Event.user)).filter(Event.video_id == video_id).order_by(Event.video_timestamp.asc()).all()
+    
+    # Create event responses with usernames
+    event_responses = []
+    for event in events:
+        event_dict = {
+            "id": event.id,
+            "title": event.title,
+            "description": event.description,
+            "video_timestamp": event.video_timestamp,
+            "event_type": event.event_type,
+            "user_id": event.user_id,
+            "video_id": event.video_id,
+            "user_username": event.user.username if event.user else "Unknown",
+            "user_profile_picture": event.user.profile_picture if event.user else None,
+            "created_at": event.created_at,
+            "updated_at": event.updated_at
+        }
+        event_responses.append(event_dict)
+    
+    return event_responses
 
 @router.post("/", response_model=EventResponse)
 async def create_event(
@@ -34,6 +53,7 @@ async def create_event(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    print(event_data)
     """Create a new event"""
     video = db.query(Video).filter(Video.id == event_data.video_id).first()
     if not video:
@@ -46,10 +66,27 @@ async def create_event(
         **event_data.model_dump(),
         user_id=current_user.id
     )
+
     db.add(event)
     db.commit()
     db.refresh(event)
-    return event
+    
+    # Create response with username
+    response = {
+        "id": event.id,
+        "title": event.title,
+        "description": event.description,
+        "video_timestamp": event.video_timestamp,
+        "event_type": event.event_type,
+        "user_id": event.user_id,
+        "video_id": event.video_id,
+        "user_username": current_user.username,
+        "user_profile_picture": current_user.profile_picture,
+        "created_at": event.created_at,
+        "updated_at": event.updated_at
+    }
+    
+    return response
 
 @router.patch("/{event_id}", response_model=EventResponse)
 async def update_event(
@@ -71,7 +108,23 @@ async def update_event(
     
     db.commit()
     db.refresh(event)
-    return event
+    
+    # Create response with username
+    response = {
+        "id": event.id,
+        "title": event.title,
+        "description": event.description,
+        "video_timestamp": event.video_timestamp,
+        "event_type": event.event_type,
+        "user_id": event.user_id,
+        "video_id": event.video_id,
+        "user_username": current_user.username,
+        "user_profile_picture": current_user.profile_picture,
+        "created_at": event.created_at,
+        "updated_at": event.updated_at
+    }
+    
+    return response
 
 @router.delete("/{event_id}", status_code=204)
 async def delete_event(

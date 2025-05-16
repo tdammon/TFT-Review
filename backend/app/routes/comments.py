@@ -79,6 +79,7 @@ async def create_comment(
         comment = Comment(
             content=comment_data.content,
             user_id=current_user.id,
+            user_username=current_user.username,
             video_id=comment_data.video_id,
             parent_id=comment_data.parent_id,
             video_timestamp=comment_data.video_timestamp,
