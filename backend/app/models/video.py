@@ -30,8 +30,8 @@ class Video(Base):
     thumbnail_url: Mapped[Optional[str]] = Column(String, nullable=True)
     duration: Mapped[Optional[int]] = Column(Integer, nullable=True)
 
-    # TFT specific (optional)
-    game_version: Mapped[Optional[str]] = Column(String(20), nullable=True)  # TFT patch
+    # TFT specific
+    game_version: Mapped[str] = Column(String(20), nullable=True)  # TFT patch
     composition: Mapped[Optional[List[str]]] = Column(ARRAY(String), nullable=True)  # Team comp used
     rank: Mapped[Optional[str]] = Column(String(20), nullable=True)  # Rank of the team
     result: Mapped[Optional[str]] = Column(String(20), nullable=True)  # Result of the game

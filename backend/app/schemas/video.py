@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, validator, model_validator
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
 import uuid
+import re
 from .comment import CommentResponse
 from .event import EventResponse
 
@@ -24,11 +25,19 @@ class VideoUpdate(BaseModel):
     """Schema for updating video metadata"""
     title: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
-    game_version: Optional[str] = Field(None, max_length=20)
+    game_version: str = Field(..., max_length=20, description="TFT patch version (required), e.g., 14.4 or 14.4a")
     composition: Optional[List[str]] = None
     rank: Optional[str] = Field(None, max_length=20)
     result: Optional[str] = Field(None, max_length=20)
     visibility: Optional[VideoVisibility] = None
+    
+    @validator('game_version')
+    def validate_game_version(cls, v):
+        if not v:
+            raise ValueError('Patch version is required')
+        if not re.match(r'^\d+\.\d+[a-z]?$', v):
+            raise ValueError('Invalid patch format. Use format like 14.4 or 14.4a')
+        return v
 
 class VideoInDB(VideoBase):
     """Schema for video as stored in database"""

@@ -12,7 +12,7 @@ from ..models.comment import Comment
 from ..models.user import User
 from ..models.video import Video, VideoVisibility
 from ..models.event import Event
-from ..schemas.video import VideoCreate, VideoResponse, VideoDetailResponse
+from ..schemas.video import VideoCreate, VideoResponse, VideoDetailResponse, VideoUpdate
 from ..schemas.comment import CommentCreate, CommentUpdate, CommentResponse
 from ..schemas.event import EventResponse
 from ..auth import get_current_user
@@ -34,6 +34,10 @@ async def upload_video(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     visibility: VideoVisibility = Form(VideoVisibility.PRIVATE),
+    game_version: Optional[str] = Form(None),
+    rank: Optional[str] = Form(None),
+    result: Optional[str] = Form(None),
+    composition: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -52,6 +56,11 @@ async def upload_video(
         # Generate thumbnail
         thumbnail_url = await generate_thumbnail(video_url)
         
+        # Parse composition if provided
+        composition_list = None
+        if composition:
+            composition_list = [item.strip() for item in composition.split(",") if item.strip()]
+        
         # Create video record in database
         new_video = Video(
             title=title,
@@ -60,7 +69,11 @@ async def upload_video(
             video_url=video_url,
             thumbnail_url=thumbnail_url,
             visibility=visibility,
-            user_id=current_user.id
+            user_id=current_user.id,
+            game_version=game_version,
+            rank=rank,
+            result=result,
+            composition=composition_list
         )
         
         db.add(new_video)
@@ -232,5 +245,34 @@ async def stream_video(
     
     # Return the streaming URL
     return {"url": video.video_url}
+
+@router.patch("/{video_id}", response_model=VideoResponse)
+async def update_video(
+    video_id: uuid.UUID,
+    video_data: VideoUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update video details"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    if video.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized to update this video")
+    
+    # Update video fields from the request data
+    for key, value in video_data.model_dump(exclude_unset=True).items():
+        setattr(video, key, value)
+    
+    db.commit()
+    db.refresh(video)
+    
+    # Add username to the response
+    video_dict = VideoResponse.model_validate(video).model_dump()
+    video_dict["user_username"] = current_user.username
+    
+    return VideoResponse.model_validate(video_dict)
 
 
