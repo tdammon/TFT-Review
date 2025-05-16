@@ -126,3 +126,7 @@
 .logoutButton {
   color: #ff4444;
 }
+
+h1 {
+  margin: 0;
+}

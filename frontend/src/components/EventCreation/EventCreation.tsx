@@ -7,7 +7,13 @@ import styles from "./EventCreation.module.css";
 interface Event {
   id: string;
   title: string;
+  description?: string;
   video_timestamp: number;
+  event_type?: string;
+  user_id: string;
+  video_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const EventCreation: React.FC = () => {
@@ -101,12 +107,19 @@ const EventCreation: React.FC = () => {
         throw new Error("Authentication failed");
       }
 
+      console.log(videoRef.current?.currentTime, videoId, eventTitle);
+
+      // Ensure timestamp is never exactly 0
+      let timestamp = videoRef.current?.currentTime || 0.1;
+      if (timestamp < 0.1) timestamp = 0.1;
+
       const response = await api.post(
         "/api/v1/events/",
         {
           title: eventTitle,
           video_id: videoId,
-          video_timestamp: videoRef.current?.currentTime || 0,
+          video_timestamp: timestamp,
+          description: `Key moment at ${formatTimestamp(timestamp)}`,
         },
         {
           headers: {
@@ -114,6 +127,7 @@ const EventCreation: React.FC = () => {
           },
         }
       );
+      console.log(response.data);
 
       // Add the new event to the list
       setEvents((prev) => [...prev, response.data]);
