@@ -8,8 +8,17 @@ import os
 load_dotenv()
 
 # Database configuration
-DATABASE_URL = os.getenv("POSTGRES_URL")
-engine = create_engine(DATABASE_URL)
+# Check for DATABASE_URL first (Render's default), then fall back to POSTGRES_URL
+database_url = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+
+if database_url is None:
+    raise ValueError("No database URL found in environment variables. Please set either DATABASE_URL or POSTGRES_URL.")
+
+# Convert postgres:// to postgresql:// if necessary (for SQLAlchemy 1.4+ compatibility)
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

@@ -9,6 +9,10 @@ services:
         fromDatabase:
           name: tft-review-db
           property: connectionString
+      - key: POSTGRES_URL
+        fromDatabase:
+          name: tft-review-db
+          property: connectionString
       - key: AUTH0_DOMAIN
         sync: false
       - key: AUTH0_AUDIENCE
