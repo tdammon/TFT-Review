@@ -2,7 +2,6 @@ services:
   - type: web
     name: tft-review-api
     env: python
-    plan: free
     buildCommand: pip install -r backend/requirements.txt && cd backend && alembic upgrade head
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -26,10 +25,8 @@ services:
         value: https://bettertft.com/auth/riot/callback
     healthCheckPath: /api/v1/health
 
-  - type: web
+  - type: static
     name: tft-review-frontend
-    env: static
-    plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/build
     envVars:
@@ -51,6 +48,5 @@ services:
 
 databases:
   - name: tft-review-db
-    plan: free
     databaseName: tft_review
     user: tft_review_user
