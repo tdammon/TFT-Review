@@ -16,7 +16,7 @@ class Comment(Base):
     user_id: Mapped[str] = Column(UUID(as_uuid=True), ForeignKey("user.id"))
     video_id: Mapped[str] = Column(UUID(as_uuid=True), ForeignKey("video.id"))
     parent_id: Mapped[Optional[str]] = Column(UUID(as_uuid=True), ForeignKey("comment.id"), nullable=True)
-    # New field to link comments to events
+    # Field to link comments to events
     event_id: Mapped[Optional[str]] = Column(UUID(as_uuid=True), ForeignKey("event.id"), nullable=True)
     content: Mapped[str] = Column(String, nullable=False)
     
@@ -27,7 +27,7 @@ class Comment(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="comments")
     video: Mapped["Video"] = relationship("Video", back_populates="comments")
-    event: Mapped[Optional["Event"]] = relationship("Event", back_populates="comments")
+    event: Mapped[Optional["Event"]] = relationship("Event", back_populates="comments", foreign_keys=[event_id])
     
     # Self-referential relationship
     parent: Mapped[Optional["Comment"]] = relationship(

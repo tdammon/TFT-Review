@@ -12,7 +12,9 @@ from .base import Base
 
 
 class Event(Base):
+    # Use id as the primary key to maintain consistency
     id: Mapped[str] = Column(UUID(as_uuid=True), primary_key=True, index=True, default=Base.generate_uuid)
+    
     user_id: Mapped[str] = Column(UUID(as_uuid=True), ForeignKey("user.id"))
     video_id: Mapped[str] = Column(UUID(as_uuid=True), ForeignKey("video.id"))
     video_timestamp: Mapped[float] = Column(Float, nullable=False)
@@ -23,4 +25,9 @@ class Event(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="events")
     video: Mapped["Video"] = relationship("Video", back_populates="events")
-    comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="event", cascade="all, delete-orphan")
+    comments: Mapped[List["Comment"]] = relationship(
+        "Comment", 
+        back_populates="event", 
+        cascade="all, delete-orphan",
+        foreign_keys="Comment.event_id"
+    )

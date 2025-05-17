@@ -6,6 +6,10 @@ services:
       pip install -r backend/requirements.txt
       cd backend
       python -c "import time; time.sleep(5)"  # Wait for DB to be ready
+      # First run our specific migration for event_id
+      alembic upgrade add_event_id_to_comments
+      # Then run any other pending migrations
+      export PYTHONWARNINGS="ignore:.*"
       alembic upgrade head
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
