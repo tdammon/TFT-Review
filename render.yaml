@@ -25,8 +25,9 @@ services:
         value: https://bettertft.com/auth/riot/callback
     healthCheckPath: /api/v1/health
 
-  - type: static
+  - type: web
     name: tft-review-frontend
+    env: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/build
     envVars:
