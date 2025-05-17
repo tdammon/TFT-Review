@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: tft-review-api
+    env: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt && cd backend && alembic upgrade head
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tft-review-db
+          property: connectionString
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://bettertft.com,https://www.bettertft.com
+      - key: FRONTEND_URL
+        value: https://bettertft.com
+      - key: RIOT_CLIENT_ID
+        sync: false
+      - key: RIOT_CLIENT_SECRET
+        sync: false
+      - key: RIOT_REDIRECT_URI
+        value: https://bettertft.com/auth/riot/callback
+    healthCheckPath: /api/v1/health
+
+  - type: web
+    name: tft-review-frontend
+    env: static
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://tft-review-api.onrender.com
+      - key: REACT_APP_AUTH0_DOMAIN
+        sync: false
+      - key: REACT_APP_AUTH0_CLIENT_ID
+        sync: false
+      - key: REACT_APP_AUTH0_AUDIENCE
+        sync: false
+    domains:
+      - bettertft.com
+      - www.bettertft.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  - name: tft-review-db
+    plan: free
+    databaseName: tft_review
+    user: tft_review_user

@@ -132,7 +132,8 @@ const AppRoutes = () => {
       <Routes>
         <Route element={<AuthLayout />}>
           {userInfo && (
-            <Route path="/" element={<HomePage userInfo={userInfo} />} />
+            // <Route path="/" element={<HomePage userInfo={userInfo} />} />
+            <Route path="/" element={<OnboardingPage />} />
           )}
           <Route
             path="/video/:videoId"

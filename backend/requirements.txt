@@ -2,15 +2,16 @@ Flask==3.0.2
 flask-cors==4.0.0
 python-dotenv==1.0.0
 pytest==8.0.2
-fastapi==0.104.1
-uvicorn==0.24.0
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-pydantic==2.5.2
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+fastapi==0.95.1
+uvicorn==0.22.0
+sqlalchemy==2.0.13
+psycopg2-binary==2.9.6
+pydantic==1.10.7
+python-jose==3.3.0
+passlib==1.7.4
 python-multipart==0.0.6
 pytest-cov==4.1.0
-httpx==0.26.0  # Required for TestClient
-alembic==1.13.1
-requests==2.31.0  # Required for Auth0 JWKS 
+httpx==0.24.0
+alembic==1.10.4
+requests==2.29.0
+bcrypt==4.0.1 

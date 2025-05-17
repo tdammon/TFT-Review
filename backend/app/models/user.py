@@ -22,6 +22,11 @@ class User(Base):
         comments (List[Comment]): List of comments made by the user
         riot_id (str): Riot ID for the user
         riot_puuid (str): Permanent User ID from Riot
+        riot_account_name (str): Riot account name (e.g., "Summoner")
+        riot_account_tag (str): Riot account tag (e.g., "NA1")
+        riot_region (str): Riot account region
+        riot_access_token (str): OAuth access token for Riot API
+        riot_refresh_token (str): OAuth refresh token for Riot API
         verified_riot_account (bool): Indicates if the user has verified their Riot account
         discord_id (str): Discord user ID
         discord_username (str): Discord username
@@ -37,6 +42,11 @@ class User(Base):
     # Riot integration
     riot_id: Mapped[str] = Column(String(100), unique=True, index=True, nullable=True)
     riot_puuid: Mapped[str] = Column(String(100), unique=True, index=True, nullable=True)
+    riot_account_name: Mapped[str] = Column(String(100), nullable=True)
+    riot_account_tag: Mapped[str] = Column(String(20), nullable=True)
+    riot_region: Mapped[str] = Column(String(10), nullable=True)
+    riot_access_token: Mapped[str] = Column(String(2000), nullable=True)
+    riot_refresh_token: Mapped[str] = Column(String(2000), nullable=True)
     verified_riot_account: Mapped[bool] = Column(Boolean, default=False)
     
     # Discord integration

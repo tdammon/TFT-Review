@@ -71,4 +71,91 @@
   color: #ff4444;
   font-size: 0.9rem;
   text-align: left;
+  margin-bottom: 1rem;
+}
+
+/* League Connection Styles */
+.logoContainer {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.logo {
+  width: 100%;
+  height: auto;
+}
+
+.description {
+  color: #bbb;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.benefitsList {
+  text-align: left;
+  padding-left: 1.5rem;
+  margin-bottom: 2rem;
+  list-style-type: disc;
+}
+
+.benefitsList li {
+  color: #aaa;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+  font-size: 0.95rem;
+}
+
+.buttonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.primaryButton {
+  padding: 0.75rem;
+  border-radius: 4px;
+  border: none;
+  background: linear-gradient(45deg, #d13639, #c4252a);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.primaryButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(209, 54, 57, 0.3);
+}
+
+.secondaryButton {
+  padding: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: transparent;
+  color: #ccc;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.note {
+  color: #999;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  font-style: italic;
 }

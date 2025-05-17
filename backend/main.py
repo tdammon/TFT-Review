@@ -4,11 +4,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 import os
-from app.routes import users_router, videos_router, comments_router, events_router
+from app.routes import users_router, videos_router, comments_router, events_router, auth_router
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from app.auth import AuthMiddleware
 from app.db.database import get_db
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -17,9 +19,10 @@ load_dotenv()
 app = FastAPI(title="TFT Review API")
 
 # Configure CORS
+origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("CORS_ORIGIN", "http://localhost:3000")],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,6 +30,10 @@ app.add_middleware(
 
 # Add auth middleware
 app.add_middleware(AuthMiddleware)
+
+# Mount static files directory
+static_dir = Path(__file__).parent / "app" / "static"
+app.mount("/", StaticFiles(directory=str(static_dir)), name="static")
 
 # Root endpoint
 @app.get("/")
@@ -48,6 +55,7 @@ app.include_router(videos_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(comments_router, prefix="/api/v1")
 app.include_router(events_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
 
 # Add error handlers
 @app.exception_handler(RequestValidationError)
@@ -57,6 +65,9 @@ async def validation_exception_handler(request, exc):
         content={"detail": exc.errors()}
     )
 
+@app.get("/api/v1/health")
+async def health_check():
+    return {"status": "ok"}
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 3001))) 
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
