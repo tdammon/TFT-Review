@@ -32,10 +32,6 @@ app.add_middleware(
 # Add auth middleware
 app.add_middleware(AuthMiddleware)
 
-# Mount static files directory
-static_dir = Path(__file__).parent / "app" / "static"
-app.mount("/", StaticFiles(directory=str(static_dir)), name="static")
-
 # Root endpoint
 @app.get("/")
 def read_root():
@@ -66,6 +62,10 @@ async def validation_exception_handler(request, exc):
         status_code=422,
         content={"detail": exc.errors()}
     )
+
+# Mount static files directory AFTER router registration
+static_dir = Path(__file__).parent / "app" / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 if __name__ == "__main__":
     import uvicorn
