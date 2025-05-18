@@ -67,9 +67,6 @@ async def validation_exception_handler(request, exc):
         content={"detail": exc.errors()}
     )
 
-@app.get("/api/v1/health")
-async def health_check():
-    return {"status": "ok"}
-
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=3001, reload=True) 
