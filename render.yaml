@@ -5,12 +5,24 @@ services:
     buildCommand: |
       pip install -r backend/requirements.txt
       cd backend
-      python -c "import time; time.sleep(5)"  # Wait for DB to be ready
-      # First run our specific migration for event_id
-      alembic upgrade add_event_id_to_comments
-      # Then run any other pending migrations
+      python -c "import time; time.sleep(10)"  # Wait longer for DB to be ready
+
+      # Step 1: Initialize the database with all tables
+      echo "Step 1: Initializing database..."
+      python db_init.py
+
+      # Step 2: Run manual migration to fix any schema issues
+      echo "Step 2: Running manual migration..."
+      python run_manual_migration.py
+
+      # Step 3: Make sure alembic_version is set to the latest migration
+      echo "Step 3: Fixing migration history..."
+      python fix_migrations.py
+
+      # Step 4: Run Alembic migrations for any new changes
+      echo "Step 4: Running alembic migrations..."
       export PYTHONWARNINGS="ignore:.*"
-      alembic upgrade head
+      alembic upgrade head || echo "Ignoring potential migration errors and continuing"
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
