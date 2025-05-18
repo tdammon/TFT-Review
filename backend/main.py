@@ -11,6 +11,7 @@ from app.auth import AuthMiddleware
 from app.db.database import get_db
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from app.routers.health import router as health_router
 
 # Load environment variables
 load_dotenv()
@@ -56,6 +57,7 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(comments_router, prefix="/api/v1")
 app.include_router(events_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(health_router)
 
 # Add error handlers
 @app.exception_handler(RequestValidationError)
