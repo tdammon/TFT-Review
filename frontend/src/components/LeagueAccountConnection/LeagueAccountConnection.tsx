@@ -2,7 +2,7 @@ import React from "react";
 import styles from "./LeagueAccountConnection.module.css";
 import { useAuthToken } from "../../utils/auth";
 import api from "../../api/axios";
-import riotLogo from "../../assets/riot-logo.png";
+// import riotLogo from "../../assets/riot-logo.png";
 
 interface LeagueAccountConnectionProps {
   onComplete: (connected: boolean) => void;
@@ -46,7 +46,7 @@ const LeagueAccountConnection: React.FC<LeagueAccountConnectionProps> = ({
     <div className={styles.container}>
       <div className={styles.card}>
         <div className={styles.logoContainer}>
-          <img src={riotLogo} alt="Riot Games Logo" className={styles.logo} />
+          {/* <img src={riotLogo} alt="Riot Games Logo" className={styles.logo} /> */}
         </div>
 
         <h2 className={styles.title}>Connect your League of Legends account</h2>
