@@ -159,3 +159,13 @@
   margin-top: 1rem;
   font-style: italic;
 }
+
+.buttonIcon {
+  display: inline-flex;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.primaryButton .buttonIcon svg {
+  transform: rotate(180deg); /* Makes the arrow point right */
+}

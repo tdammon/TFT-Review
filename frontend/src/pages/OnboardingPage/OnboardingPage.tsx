@@ -4,6 +4,8 @@ import { useAuth0 } from "@auth0/auth0-react";
 import styles from "./OnboardingPage.module.css";
 import api from "../../api/axios";
 import { useAuthToken } from "../../utils/auth";
+import { useLeagueConnect } from "../../utils/leagueConnect";
+
 // import RiotLogo from "../../assets/svg/RiotLogo";
 
 const AUTH0_AUDIENCE = process.env.REACT_APP_AUTH0_AUDIENCE;
@@ -24,7 +26,8 @@ const OnboardingPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [leagueConnected, setLeagueConnected] = useState(false);
   const navigate = useNavigate();
-  const { getToken } = useAuthToken();
+  const { getToken, user } = useAuthToken();
+  const { connectLeagueAccount } = useLeagueConnect();
 
   const handleUsernameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +45,10 @@ const OnboardingPage = () => {
 
       const response = await api.post(
         "/api/v1/users/complete-onboarding",
-        { username },
+        {
+          username,
+          profile_picture: user?.picture,
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -67,23 +73,8 @@ const OnboardingPage = () => {
       setError("");
       setIsLoading(true);
 
-      const token = await getToken();
-      if (!token) {
-        throw new Error("Authentication failed");
-      }
-
-      // Initiate the Riot authentication process
-      const response = await api.get("/api/v1/auth/riot/connect", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      // Redirect to Riot login page
-      window.location.href = response.data.auth_url;
-
-      // Note: The user will be redirected back to your application
-      // This flow will be continued in a callback endpoint
+      await connectLeagueAccount();
+      // Note: This will redirect the user to Riot's auth page
     } catch (error) {
       console.error("Error connecting League account:", error);
       setError(
@@ -160,7 +151,30 @@ const OnboardingPage = () => {
                 onClick={handleConnectLeagueAccount}
                 disabled={isLoading}
               >
-                {isLoading ? "Connecting..." : "Connect League Account"}
+                {isLoading ? (
+                  "Connecting..."
+                ) : (
+                  <>
+                    <span className={styles.buttonIcon}>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M20 12H4M4 12L10 6M4 12L10 18"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    Connect League Account
+                  </>
+                )}
               </button>
 
               <button

@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import styles from "./LeagueAccountConnection.module.css";
-import { useAuthToken } from "../../utils/auth";
-import api from "../../api/axios";
+import { useLeagueConnect } from "../../utils/leagueConnect";
 // import riotLogo from "../../assets/riot-logo.png";
 
 interface LeagueAccountConnectionProps {
@@ -15,30 +14,17 @@ const LeagueAccountConnection: React.FC<LeagueAccountConnectionProps> = ({
   onSkip,
   isOnboarding = false,
 }) => {
-  const { getToken } = useAuthToken();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { connectLeagueAccount } = useLeagueConnect();
 
   const handleConnectAccount = async () => {
     try {
-      const token = await getToken();
-      if (!token) {
-        throw new Error("Authentication failed");
-      }
-
-      // Initiate the Riot authentication process
-      // This would redirect to Riot's OAuth page
-      const response = await api.get("/api/v1/auth/riot/connect", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      // Redirect to Riot login page
-      window.location.href = response.data.auth_url;
-
-      // The user will be redirected back to your application after authentication
-      // You'll need to handle that in your routes
+      setIsConnecting(true);
+      await connectLeagueAccount();
+      // This will redirect, so the following code won't execute
     } catch (error) {
       console.error("Error connecting League account:", error);
+      setIsConnecting(false);
     }
   };
 
@@ -65,11 +51,16 @@ const LeagueAccountConnection: React.FC<LeagueAccountConnectionProps> = ({
           <button
             className={styles.connectButton}
             onClick={handleConnectAccount}
+            disabled={isConnecting}
           >
-            Connect League Account
+            {isConnecting ? "Connecting..." : "Connect League Account"}
           </button>
 
-          <button className={styles.skipButton} onClick={onSkip}>
+          <button
+            className={styles.skipButton}
+            onClick={onSkip}
+            disabled={isConnecting}
+          >
             {isOnboarding ? "Skip for now" : "Cancel"}
           </button>
         </div>

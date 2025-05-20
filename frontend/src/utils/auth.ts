@@ -66,7 +66,7 @@ export const getAccessTokenFromStorage = (): string | null => {
  * Custom hook that provides access to tokens, either via Auth0 methods or direct localStorage access
  */
 export const useAuthToken = () => {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated, user } = useAuth0();
 
   const getToken = async (): Promise<string | null> => {
     if (!isAuthenticated) return null;
@@ -94,5 +94,5 @@ export const useAuthToken = () => {
     }
   };
 
-  return { getToken };
+  return { getToken, user };
 };

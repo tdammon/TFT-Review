@@ -14,6 +14,9 @@ import api from "./api/axios";
 // Types
 import { User } from "./types/serverResponseTypes";
 
+// Pages
+import ProfilePage from "./pages/ProfilePage/ProfilePage";
+
 const AppRoutes = () => {
   const { isAuthenticated, isLoading } = useAuth0();
   const { getToken } = useAuthToken();
@@ -133,6 +136,12 @@ const AppRoutes = () => {
             path="/video/:videoId/add-events"
             element={<EventCreation />}
           />
+          {userInfo && (
+            <Route
+              path="/profile"
+              element={<ProfilePage userInfo={userInfo} />}
+            />
+          )}
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

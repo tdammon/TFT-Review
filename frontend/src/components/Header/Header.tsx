@@ -8,6 +8,8 @@ const Header = () => {
   const { user } = useAuth0();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
+  console.log(user);
+
   const handleOpenUploadModal = () => {
     setIsUploadModalOpen(true);
   };
@@ -75,8 +77,12 @@ const ProfileDropdown = ({ user }: { user: any }) => {
         </span>
         {isOpen && (
           <div className={styles.dropdownContent}>
-            <Link to="/profile"></Link>
-            <Link to="settings"></Link>
+            <Link className={styles.dropdownItem} to="/profile">
+              Profile
+            </Link>
+            {/* <Link className={styles.dropdownItem} to="settings">
+              Settings
+            </Link> */}
             <button
               className={`${styles.logoutButton} ${styles.dropdownItem}`}
               onClick={handleLogout}
