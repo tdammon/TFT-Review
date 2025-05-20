@@ -17,7 +17,7 @@ enum OnboardingStep {
 
 const OnboardingPage = () => {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(
-    OnboardingStep.LeagueConnection
+    OnboardingStep.Username
   );
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");

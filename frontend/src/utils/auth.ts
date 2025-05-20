@@ -1,6 +1,5 @@
 import { useAuth0 } from "@auth0/auth0-react";
 
-// Auth0 configuration
 const AUTH0_AUDIENCE = process.env.REACT_APP_AUTH0_AUDIENCE;
 
 /**

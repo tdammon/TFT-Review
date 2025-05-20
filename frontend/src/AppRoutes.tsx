@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import LoginPage from "./pages/LoginPage/LoginPage";
@@ -11,14 +11,8 @@ import AuthLayout from "./layouts/AuthLayout";
 import { useAuthToken } from "./utils/auth";
 import api from "./api/axios";
 
-interface User {
-  discord_connected: boolean;
-  id: string;
-  username: string;
-  email: string;
-  profile_picture: string;
-  verified_riot_account: boolean;
-}
+// Types
+import { User } from "./types/serverResponseTypes";
 
 const AppRoutes = () => {
   const { isAuthenticated, isLoading } = useAuth0();
@@ -38,7 +32,6 @@ const AppRoutes = () => {
             throw new Error("Access token is undefined");
           }
 
-          // Use axios instance with proper baseURL
           const response = await api.get("/api/v1/users/me", {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -62,8 +55,6 @@ const AppRoutes = () => {
         } catch (error) {
           console.error("Failed to check username:", error);
           setServerError(true);
-          // Don't set hasUsername to false on server error
-          // This prevents redirecting to onboarding on server issues
         }
       }
       setCheckingUsername(false);
@@ -132,8 +123,7 @@ const AppRoutes = () => {
       <Routes>
         <Route element={<AuthLayout />}>
           {userInfo && (
-            // <Route path="/" element={<HomePage userInfo={userInfo} />} />
-            <Route path="/" element={<OnboardingPage />} />
+            <Route path="/" element={<HomePage userInfo={userInfo} />} />
           )}
           <Route
             path="/video/:videoId"

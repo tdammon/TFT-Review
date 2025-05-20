@@ -12,49 +12,13 @@ import DetailsIcon from "../../components/Icons/DetailsIcon";
 import Tooltip from "../../components/Tooltip/Tooltip";
 import InfoIcon from "../../components/Icons/InfoIcon";
 
-interface Comment {
-  id: string;
-  content: string;
-  video_timestamp: number;
-  user_username: string;
-  user_profile_picture?: string;
-  created_at: string;
-  updated_at: string;
-  parent_id?: string;
-}
-
-interface Event {
-  id: string;
-  title: string;
-  description?: string;
-  video_timestamp: number;
-  event_type?: string;
-  user_username: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface VideoDetails {
-  id: string;
-  title: string;
-  description: string | null;
-  video_url: string | null;
-  thumbnail_url: string | null;
-  views: number;
-  user_id: string;
-  created_at: string;
-  comments: Comment[];
-  events: Event[];
-}
-
-interface User {
-  discord_connected: boolean;
-  id: string;
-  username: string;
-  email: string;
-  profile_picture: string;
-  verified_riot_account: boolean;
-}
+// Types
+import {
+  Comment,
+  Event,
+  User,
+  VideoDetails,
+} from "../../types/serverResponseTypes";
 
 // Define sidebar tab types
 type SidebarTab = "Comments" | "Admin" | "Details" | "Info";
@@ -104,7 +68,6 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
           throw new Error("Authentication failed");
         }
 
-        // Fetch video details (now includes comments)
         const detailsResponse = await api.get(`/api/v1/videos/${videoId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -113,17 +76,14 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
 
         setVideoDetails(detailsResponse.data);
 
-        // Set comments from the video details response
         if (detailsResponse.data.comments) {
           setComments(detailsResponse.data.comments);
         }
 
-        // Set events from the video details response
         if (detailsResponse.data.events) {
           setEvents(detailsResponse.data.events);
         }
 
-        // Fetch streaming URL
         const streamResponse = await api.get(
           `/api/v1/videos/${videoId}/stream`,
           {
@@ -230,6 +190,7 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
       }
 
       // Use focusedTimestamp if the input is focused, otherwise use commentTimestamp
+      // REVISIT THIS: Do we actually need two timestamps?
       const timestampToUse = isCommentInputFocused
         ? focusedTimestamp
         : commentTimestamp;
@@ -239,7 +200,7 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
         {
           content: newComment,
           video_id: videoId,
-          parent_id: null, // This is a top-level comment
+          parent_id: null,
           video_timestamp: timestampToUse,
         },
         {
@@ -356,18 +317,6 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
               </button>
             </Tooltip>
 
-            <Tooltip text="Video Info" position="bottom">
-              <button
-                className={`${styles.tabButton} ${
-                  activeTab === "Info" ? styles.activeTab : ""
-                }`}
-                onClick={() => handleTabChange("Info")}
-                aria-label="Video Info"
-              >
-                <InfoIcon stroke={activeTab === "Info" ? "#4a90e2" : "#ccc"} />
-              </button>
-            </Tooltip>
-
             {showSecondaryTab && (
               <Tooltip text={secondaryTabName} position="bottom">
                 <button
@@ -389,6 +338,18 @@ const VideoAnalysis = ({ userInfo }: { userInfo: User | null }) => {
                 </button>
               </Tooltip>
             )}
+
+            <Tooltip text="Video Info" position="bottom">
+              <button
+                className={`${styles.tabButton} ${
+                  activeTab === "Info" ? styles.activeTab : ""
+                }`}
+                onClick={() => handleTabChange("Info")}
+                aria-label="Video Info"
+              >
+                <InfoIcon stroke={activeTab === "Info" ? "#4a90e2" : "#ccc"} />
+              </button>
+            </Tooltip>
           </div>
 
           {/* Tab Content */}
