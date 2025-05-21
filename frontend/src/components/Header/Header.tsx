@@ -8,8 +8,6 @@ const Header = () => {
   const { user } = useAuth0();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
-  console.log(user);
-
   const handleOpenUploadModal = () => {
     setIsUploadModalOpen(true);
   };

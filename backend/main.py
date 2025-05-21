@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 import os
-from app.routes import users_router, videos_router, comments_router, events_router, auth_router
+from app.routes import users_router, videos_router, comments_router, events_router, auth_router, tft_router
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from app.auth import AuthMiddleware
@@ -53,6 +53,7 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(comments_router, prefix="/api/v1")
 app.include_router(events_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(tft_router, prefix="/api/v1")
 app.include_router(health_router)
 
 # Add error handlers

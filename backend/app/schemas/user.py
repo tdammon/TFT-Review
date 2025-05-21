@@ -46,6 +46,6 @@ class UserResponse(BaseModel):
     profile_picture: Optional[str] = None
     verified_riot_account: bool = False
     discord_connected: bool = False
-
+    riot_puuid: Optional[str] = None
     class Config:
         from_attributes = True 

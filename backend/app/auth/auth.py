@@ -26,13 +26,10 @@ def get_token_payload(token: str):
         is_jwt = len(token_parts) == 3
         
         if is_jwt:
-            print("Processing token as JWT")
             # Get the key ID from the token header
             try:
                 unverified_header = jwt.get_unverified_header(token)
                 kid = unverified_header.get('kid')
-                print(f"Token header: {unverified_header}")
-                print(f"Key ID (kid): {kid}")
                 
                 if not kid:
                     raise ValueError("No 'kid' found in token header")
@@ -43,15 +40,12 @@ def get_token_payload(token: str):
             # Fetch JWKS
             try:
                 jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-                print(f"Fetching JWKS from: {jwks_url}")
                 jwks_response = requests.get(jwks_url)
-                print(f"JWKS response status: {jwks_response.status_code}")
                 
                 if jwks_response.status_code != 200:
                     raise ValueError(f"Failed to fetch JWKS: {jwks_response.status_code}")
                     
                 jwks = jwks_response.json()
-                print(f"JWKS keys count: {len(jwks.get('keys', []))}")
             except Exception as e:
                 print(f"Error fetching JWKS: {str(e)}")
                 raise
@@ -69,9 +63,7 @@ def get_token_payload(token: str):
                             "e": key.get("e")
                         }
                         break
-                
-                print(f"Found matching key: {bool(rsa_key)}")
-                
+                                
                 if not rsa_key:
                     raise ValueError(f"No matching key found for kid: {kid}")
             except Exception as e:
@@ -107,7 +99,6 @@ def get_token_payload(token: str):
                         # Add email to payload if available
                         if "email" in userinfo:
                             payload["email"] = userinfo["email"]
-                        print(f"Enhanced payload with userinfo: {userinfo}")
                 except Exception as e:
                     print(f"Error fetching userinfo: {str(e)}")
                     
@@ -170,12 +161,10 @@ async def get_current_user(
     """
     try:
         token = credentials.credentials
-        print(f"Token: {token[:10]}... (truncated)")
         
         # Verify and decode the token
         try:
             payload = get_token_payload(token)
-            print("Token payload successfully decoded")
         except Exception as token_error:
             print(f"Error decoding token: {str(token_error)}")
             raise
@@ -184,22 +173,14 @@ async def get_current_user(
         try:
             auth0_id = payload["sub"]
             email = payload.get("email")
-            print(f"Extracted auth0_id: {auth0_id}")
         except KeyError as key_error:
             print(f"Missing required claim in token: {str(key_error)}")
             print(f"Available claims: {list(payload.keys())}")
             raise
         
-        # Print token payload for debugging
-        print(f"Token payload: {payload}")
-        
         # Try to get existing user first
         try:
             user = db.query(User).filter(User.auth0_id == auth0_id).first()
-            if user:
-                print(f"Found existing user with auth0_id: {auth0_id}")
-            else:
-                print(f"No existing user found with auth0_id: {auth0_id}")
         except Exception as db_error:
             print(f"Database error when querying for user: {str(db_error)}")
             raise
@@ -246,7 +227,6 @@ async def get_current_user(
             print(f"Username required but not found for user: {auth0_id}")
             raise HTTPException(status_code=404, detail="User not found")
         
-        print(f"Successfully returning user: {auth0_id}")
         return user
         
     except Exception as e:

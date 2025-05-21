@@ -20,6 +20,13 @@ export interface Event {
   updated_at: string;
 }
 
+export interface MatchHistorySummary {
+  average_placement: number;
+  first_places: number;
+  top4_rate: number;
+  total_estimated_lp_change: number;
+}
+
 export interface VideoDetails {
   id: string;
   title: string;
@@ -33,6 +40,17 @@ export interface VideoDetails {
   events: Event[];
 }
 
+export interface PlayerRank {
+  tier: string | null;
+  rank: string | null;
+  lp: number;
+  formatted_rank: string;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  is_ranked: boolean;
+}
+
 export interface User {
   discord_connected: boolean;
   id: string;
@@ -40,4 +58,6 @@ export interface User {
   email: string;
   profile_picture: string;
   verified_riot_account: boolean;
+  riot_puuid: string;
+  riot_region?: string;
 }
