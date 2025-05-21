@@ -27,6 +27,17 @@ export interface MatchHistorySummary {
   total_estimated_lp_change: number;
 }
 
+export interface MatchHistoryItem {
+  match_id: string;
+  timestamp: number;
+  date: string;
+  placement: number;
+  estimated_lp_change: number;
+  lp_after_game?: number;
+  promotion?: boolean;
+  demotion?: boolean;
+}
+
 export interface VideoDetails {
   id: string;
   title: string;

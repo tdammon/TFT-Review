@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 import os
 import traceback
+import time
 
 from ..db.database import get_db
 from ..models.user import User
@@ -17,10 +18,13 @@ router = APIRouter(
 @router.get("/rating-history")
 async def get_rating_history(
     match_count: int = 20,
+    initial_count: int = 0,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get TFT rating history for the current user"""
+    route_start_time = time.time()
+    print(f"[ROUTE PERF] Starting rating-history endpoint for user {current_user.username}, match count: {match_count}")
 
     if not current_user.verified_riot_account or not current_user.riot_puuid:
         raise HTTPException(
@@ -30,6 +34,9 @@ async def get_rating_history(
     
     riot_service = None
     try:
+        # Initialize service
+        init_start = time.time()
+        print(f"[ROUTE PERF] Getting API key and initializing service")
         api_key = os.getenv("RIOT_API_KEY")
         if not api_key:
             raise ValueError("RIOT_API_KEY environment variable is not set")
@@ -42,15 +49,29 @@ async def get_rating_history(
             region_routing = "europe"
         elif region_game.startswith("kr") or region_game.startswith("jp"):
             region_routing = "asia"
+        init_end = time.time()
+        print(f"[ROUTE PERF] Service initialization completed in {init_end - init_start:.2f}s")
 
+        # Call service method
+        service_call_start = time.time()
+        print(f"[ROUTE PERF] Calling service.get_rating_history with puuid={current_user.riot_puuid[:8]}..., count={match_count}")
         history = await riot_service.get_rating_history(
             puuid=current_user.riot_puuid,
             count=match_count,
+            initial_count=initial_count,
             region_routing=region_routing
-        )    
+        )   
+        service_call_end = time.time()
+        print(f"[ROUTE PERF] Service call completed in {service_call_end - service_call_start:.2f}s")
+        
+        # Finalize response
+        response_time = time.time()
+        print(f"[ROUTE PERF] Endpoint completed in {response_time - route_start_time:.2f}s")
         return history
     except Exception as e:
+        error_time = time.time()
         error_detail = f"Error fetching rating history: {str(e)}"
+        print(f"[ROUTE PERF] Error occurred after {error_time - route_start_time:.2f}s")
         print(error_detail)
         print(traceback.format_exc())
         raise HTTPException(
@@ -58,11 +79,15 @@ async def get_rating_history(
             detail=error_detail
         )
     finally:
+        cleanup_start = time.time()
         if riot_service:
             try:
                 await riot_service.close()
+                cleanup_end = time.time()
+                print(f"[ROUTE PERF] Service cleanup completed in {cleanup_end - cleanup_start:.2f}s")
             except Exception as e:
                 print(f"Error closing riot_service: {str(e)}")
+                print(f"[ROUTE PERF] Service cleanup failed after {time.time() - cleanup_start:.2f}s")
     
 @router.get("/summoner-info")
 async def get_summoner_info(

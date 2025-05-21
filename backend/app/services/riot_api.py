@@ -23,7 +23,8 @@ class RiotApiService:
     async def _request(self, method: str, url: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make a request to the Riot API"""
         headers = {"X-Riot-Token": self.api_key}
-
+        
+        start_time = time.time()
         try:
             session = await self.get_session()
             
@@ -37,8 +38,13 @@ class RiotApiService:
                     error_text = await response.text()
                     raise Exception(f"Riot API error: {response.status} - {error_text}")
                 
-                return await response.json()
+                data = await response.json()
+                end_time = time.time()
+                print(f"API Request completed: {url} - {end_time - start_time:.2f}s")
+                return data
         except Exception as e:
+            end_time = time.time()
+            print(f"API Request failed: {url} - {end_time - start_time:.2f}s - Error: {str(e)}")
             # Re-raise the exception but ensure we don't lose the original error
             raise Exception(f"Request failed: {str(e)}") from e
         
@@ -56,15 +62,35 @@ class RiotApiService:
         url = f"https://{region}.api.riotgames.com/tft/summoner/v1/summoners/by-puuid/{puuid}"
         return await self.get(url)
     
-    async def get_match_history(self, puuid: str, count: int = 20, region: str = "americas") -> List[str]:
+    async def get_match_history(self, puuid: str, count: int = 20, start: int = 0, region: str = "americas") -> List[str]:
         """Get match history for a player"""
+        start_time = time.time()
+        print(f"[PERF] get_match_history: Starting request for {count} matches, puuid={puuid[:8]}...")
         url = f"https://{region}.api.riotgames.com/tft/match/v1/matches/by-puuid/{puuid}/ids"
-        return await self.get(url, params={"count": count})
+        try:
+            result = await self.get(url, params={"count": count, "start": start})
+            end_time = time.time()
+            print(f"[PERF] get_match_history: Completed in {end_time - start_time:.2f}s, retrieved {len(result)} matches")
+            return result
+        except Exception as e:
+            end_time = time.time()
+            print(f"[PERF] get_match_history: Failed after {end_time - start_time:.2f}s - {str(e)}")
+            raise
     
     async def get_match_details(self, match_id: str, region: str = "americas") -> Dict[str, Any]:
         """Get details for a specific match"""
+        start_time = time.time()
+        print(f"[PERF] get_match_details: Starting request for match {match_id}")
         url = f"https://{region}.api.riotgames.com/tft/match/v1/matches/{match_id}"
-        return await self.get(url)
+        try:
+            result = await self.get(url)
+            end_time = time.time()
+            print(f"[PERF] get_match_details: Completed in {end_time - start_time:.2f}s")
+            return result
+        except Exception as e:
+            end_time = time.time()
+            print(f"[PERF] get_match_details: Failed after {end_time - start_time:.2f}s - {str(e)}")
+            raise
         
     # League/Ranked Methods
     async def get_league_entries(self, puuid: str, region: str = "americas") -> List[Dict[str, Any]]:
@@ -183,7 +209,7 @@ class RiotApiService:
         else:  # placement == 8
             return -40            
         
-    async def get_rating_history(self, puuid: str, count: int = 20, region_routing: str = "americas") -> Dict[str, Any]:
+    async def get_rating_history(self, puuid: str, count: int = 20, initial_count: int = 0, region_routing: str = "americas") -> Dict[str, Any]:
         """
         Calculate rating history based on match history
         
@@ -195,12 +221,26 @@ class RiotApiService:
         Returns:
             Dictionary with rating history and summary statistics
         """
+        total_start_time = time.time()
+        print(f"[PERF] Starting get_rating_history for {count} matches")
+        
         try:
             # Get match history
-            match_ids = await self.get_match_history(puuid, count, region_routing)
-            # Process each match
+            match_history_start = time.time()
+            print(f"[PERF] Fetching match history...")
+            match_ids = await self.get_match_history(puuid, count, initial_count, region_routing)
+            match_history_end = time.time()
+            print(f"[PERF] Match history fetched: {len(match_ids)} matches - {match_history_end - match_history_start:.2f}s")
+            
+            # Process matches in parallel with controlled concurrency
             player_data = []
-            for match_id in match_ids:
+            match_details_start = time.time()
+            print(f"[PERF] Starting parallel match details fetching")
+            
+            # Function to process a single match
+            async def process_match(match_id, index):
+                match_start = time.time()
+                print(f"[PERF] Processing match {index+1}/{len(match_ids)}: {match_id}")
                 try:
                     match = await self.get_match_details(match_id, region_routing)
                     
@@ -211,26 +251,55 @@ class RiotApiService:
                             timestamp = match.get('info', {}).get('game_datetime', 0) / 1000
                             lp_change = self.estimate_lp_change(placement)
                             
-                            player_data.append({
+                            match_data = {
                                 'match_id': match_id,
                                 'timestamp': timestamp,
                                 'date': datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S'),
                                 'placement': placement,
                                 'estimated_lp_change': lp_change
-                            })
-                            break
-                    
-                    # Respect rate limits with async sleep
-                    await asyncio.sleep(1.2)
-                    
+                            }
+                            
+                            match_end = time.time()
+                            print(f"[PERF] Match {index+1} processed in {match_end - match_start:.2f}s")
+                            return match_data
                 except Exception as e:
-                    # Log error but continue processing other matches
-                    print(f"Error processing match {match_id}: {str(e)}")
+                    match_end = time.time()
+                    print(f"[PERF] Error processing match {match_id}: {str(e)} - took {match_end - match_start:.2f}s")
+                    return None
+            
+            # Use a semaphore to limit concurrency to 3 concurrent requests
+            # This balances speed with respect for rate limits
+            semaphore = asyncio.Semaphore(3)
+            
+            async def process_with_semaphore(match_id, index):
+                async with semaphore:
+                    # Add a small delay between requests to avoid rate limit issues
+                    if index > 0:
+                        delay = 0.25  # 250ms between requests
+                        await asyncio.sleep(delay)
+                    return await process_match(match_id, index)
+            
+            # Create tasks for all matches
+            tasks = [process_with_semaphore(match_id, i) for i, match_id in enumerate(match_ids)]
+            
+            # Wait for all tasks to complete
+            results = await asyncio.gather(*tasks)
+            
+            # Filter out any None results (failed matches)
+            player_data = [result for result in results if result is not None]
+            
+            match_details_end = time.time()
+            match_details_total_time = match_details_end - match_details_start
+            print(f"[PERF] All matches processed in parallel. Total processing time: {match_details_total_time:.2f}s")
             
             # Sort by timestamp
+            sorting_start = time.time()
             player_data.sort(key=lambda x: x['timestamp'])
+            sorting_end = time.time()
+            print(f"[PERF] Sorting completed in {sorting_end - sorting_start:.2f}s")
             
             # Calculate cumulative LP
+            calculation_start = time.time()
             base_lp = 50  # Assume starting at 50 LP
             for game in player_data:
                 game['lp_after_game'] = base_lp + game['estimated_lp_change']
@@ -247,19 +316,36 @@ class RiotApiService:
                     game['promotion'] = False
                     game['demotion'] = False
             
+            # Calculate summary stats
+            summary = {
+                "average_placement": sum(game['placement'] for game in player_data) / len(player_data) if player_data else 0,
+                "total_estimated_lp_change": sum(game['estimated_lp_change'] for game in player_data),
+                "first_places": sum(1 for game in player_data if game['placement'] == 1),
+                "top4_rate": sum(1 for game in player_data if game['placement'] <= 4) / len(player_data) if player_data else 0
+            }
+            calculation_end = time.time()
+            print(f"[PERF] Calculations completed in {calculation_end - calculation_start:.2f}s")
+            
+            total_end_time = time.time()
+            total_time = total_end_time - total_start_time
+            print(f"[PERF] get_rating_history completed in {total_time:.2f}s")
+            
             return {
                 "rating_history": player_data,
                 "matches_analyzed": len(player_data),
-                "summary": {
-                    "average_placement": sum(game['placement'] for game in player_data) / len(player_data) if player_data else 0,
-                    "total_estimated_lp_change": sum(game['estimated_lp_change'] for game in player_data),
-                    "first_places": sum(1 for game in player_data if game['placement'] == 1),
-                    "top4_rate": sum(1 for game in player_data if game['placement'] <= 4) / len(player_data) if player_data else 0
+                "summary": summary,
+                "performance_metrics": {
+                    "total_time_seconds": total_time,
+                    "match_history_fetch_time": match_history_end - match_history_start,
+                    "match_details_fetch_time": match_details_total_time,
+                    "sorting_time": sorting_end - sorting_start,
+                    "calculation_time": calculation_end - calculation_start
                 }
             }
         except Exception as e:
             # Log error but return a minimal response to prevent hanging
-            print(f"Error in get_rating_history: {str(e)}")
+            total_end_time = time.time()
+            print(f"[PERF] Error in get_rating_history: {str(e)} - Total time: {total_end_time - total_start_time:.2f}s")
             return {
                 "rating_history": [],
                 "matches_analyzed": 0,
@@ -269,7 +355,11 @@ class RiotApiService:
                     "first_places": 0,
                     "top4_rate": 0
                 },
-                "error": str(e)
+                "error": str(e),
+                "performance_metrics": {
+                    "total_time_seconds": total_end_time - total_start_time,
+                    "error": True
+                }
             }
 
     async def close(self):

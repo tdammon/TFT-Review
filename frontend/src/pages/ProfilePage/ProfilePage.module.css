@@ -85,6 +85,40 @@
   min-height: 400px;
 }
 
+.tabsContainer {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.tabButton {
+  background-color: #252525;
+  color: #9e9e9e;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.tabButton:hover {
+  background-color: #303030;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.activeTab {
+  background-color: #1e88e5;
+  color: white;
+}
+
+.activeTab:hover {
+  background-color: #1976d2;
+}
+
 .profileStatsContainer {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -189,5 +223,14 @@
   .profileConnectContainer {
     margin-left: 0;
     margin-top: 1.5rem;
+  }
+
+  .tabsContainer {
+    flex-wrap: wrap;
+  }
+
+  .tabButton {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
   }
 }
