@@ -6,14 +6,14 @@ import uuid
 class CommentBase(BaseModel):
     """Base comment attributes"""
     content: str = Field(..., min_length=1, max_length=1000)  # Prevent empty/huge comments
-    timestamp: Optional[int] = None  # Video timestamp in seconds
     event_id: Optional[uuid.UUID] = None  # Link to an event
+    video_timestamp: Optional[float] = None  # Timestamp in the video
 
 class CommentCreate(CommentBase):
     """Schema for creating a new comment"""
     video_id: uuid.UUID  # Which video this comment is for
     parent_id: Optional[uuid.UUID] = None  # ID of the parent comment (for nested comments)
-    video_timestamp: Optional[float] = None  # Timestamp in the video
+
 
 class CommentUpdate(BaseModel):
     """Schema for updating a comment"""

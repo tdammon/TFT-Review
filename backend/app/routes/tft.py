@@ -15,6 +15,26 @@ router = APIRouter(
     tags=["tft"]
 )
 
+def get_region_routing(user_region: str) -> tuple[str, str]:
+    """
+    Get the appropriate region routing and game region based on user's selected region
+    
+    Args:
+        user_region: The region selected by user during onboarding (americas, europe, asia)
+        
+    Returns:
+        tuple: (region_routing, region_game) for API calls
+    """
+    if user_region == "americas":
+        return "americas", "na1"
+    elif user_region == "europe":
+        return "europe", "euw1"
+    elif user_region == "asia":
+        return "asia", "kr"
+    else:
+        # Default fallback
+        return "americas", "na1"
+
 @router.get("/rating-history")
 async def get_rating_history(
     match_count: int = 20,
@@ -32,6 +52,12 @@ async def get_rating_history(
             detail="User does not have a connected Riot account"
         )
     
+    if not current_user.riot_region:
+        raise HTTPException(
+            status_code=400,
+            detail="User region not set. Please complete onboarding."
+        )
+    
     riot_service = None
     try:
         # Initialize service
@@ -42,13 +68,9 @@ async def get_rating_history(
             raise ValueError("RIOT_API_KEY environment variable is not set")
             
         riot_service = RiotApiService(api_key)
-        region_game = current_user.riot_region or "na1"
-        region_routing = "americas"
-
-        if region_game.startswith("eu"):
-            region_routing = "europe"
-        elif region_game.startswith("kr") or region_game.startswith("jp"):
-            region_routing = "asia"
+        region_routing, region_game = get_region_routing(current_user.riot_region)
+        
+        print(f"[ROUTE PERF] Using region routing: {region_routing}, game region: {region_game}")
         init_end = time.time()
         print(f"[ROUTE PERF] Service initialization completed in {init_end - init_start:.2f}s")
 
@@ -102,6 +124,12 @@ async def get_summoner_info(
             detail="User does not have a connected Riot account"
         )
 
+    if not current_user.riot_region:
+        raise HTTPException(
+            status_code=400,
+            detail="User region not set. Please complete onboarding."
+        )
+
     riot_service = None
     try:
         api_key = os.getenv("RIOT_API_KEY")
@@ -109,13 +137,7 @@ async def get_summoner_info(
             raise ValueError("RIOT_API_KEY environment variable is not set")
             
         riot_service = RiotApiService(api_key)
-        region_game = current_user.riot_region or "na1"
-        region_routing = "americas"
-
-        if region_game.startswith("eu"):
-            region_routing = "europe"
-        elif region_game.startswith("kr") or region_game.startswith("jp"):
-            region_routing = "asia"
+        region_routing, region_game = get_region_routing(current_user.riot_region)
 
         summonerInfo = await riot_service.get_summoner_by_puuid(
             puuid=current_user.riot_puuid, 
@@ -150,6 +172,12 @@ async def get_player_rank(
             detail="User does not have a connected Riot account"
         )
 
+    if not current_user.riot_region:
+        raise HTTPException(
+            status_code=400,
+            detail="User region not set. Please complete onboarding."
+        )
+
     riot_service = None
     try:
         api_key = os.getenv("RIOT_API_KEY")
@@ -157,11 +185,11 @@ async def get_player_rank(
             raise ValueError("RIOT_API_KEY environment variable is not set")
             
         riot_service = RiotApiService(api_key)
-        region_game = current_user.riot_region or "na1"
+        region_routing, region_game = get_region_routing(current_user.riot_region)
             
         rank_info = await riot_service.get_player_rank(
             puuid=current_user.riot_puuid,
-            region=region_game
+            region=region_routing  # Use region_routing for league endpoints
         )
                 
         return rank_info

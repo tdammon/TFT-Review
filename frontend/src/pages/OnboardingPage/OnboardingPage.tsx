@@ -17,10 +17,30 @@ enum OnboardingStep {
   Complete = 2,
 }
 
+// Region options for Riot API
+const REGION_OPTIONS = [
+  {
+    value: "americas",
+    label: "Americas",
+    description: "NA, BR, LAN, LAS, OCE",
+  },
+  {
+    value: "europe",
+    label: "Europe",
+    description: "EUW, EUNE, TR, RU",
+  },
+  {
+    value: "asia",
+    label: "Asia",
+    description: "KR, JP, SG, PH, TH, TW, VN",
+  },
+];
+
 const OnboardingPage = () => {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(
     OnboardingStep.Username
   );
+  const [selectedRegion, setSelectedRegion] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -32,6 +52,12 @@ const OnboardingPage = () => {
   const handleUsernameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!selectedRegion) {
+      setError("Please select your region");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -48,6 +74,7 @@ const OnboardingPage = () => {
         {
           username,
           profile_picture: user?.picture,
+          riot_region: selectedRegion,
         },
         {
           headers: {
@@ -56,7 +83,7 @@ const OnboardingPage = () => {
         }
       );
 
-      console.log("Username set successfully:", response.data);
+      console.log("Username and region set successfully:", response.data);
 
       // Move to the next step
       setCurrentStep(OnboardingStep.LeagueConnection);
@@ -95,8 +122,8 @@ const OnboardingPage = () => {
       case OnboardingStep.Username:
         return (
           <>
-            <h1>Welcome to League Review!</h1>
-            <p>Choose a username to get started</p>
+            <h1>Welcome to Better TFT!</h1>
+            <p>Set up your profile to get started</p>
 
             <form onSubmit={handleUsernameSubmit} className={styles.form}>
               <input
@@ -112,12 +139,38 @@ const OnboardingPage = () => {
                 required
               />
 
+              <div className={styles.regionSelection}>
+                <label className={styles.regionLabel}>
+                  Select your region:
+                </label>
+                <div className={styles.regionOptions}>
+                  {REGION_OPTIONS.map((region) => (
+                    <label key={region.value} className={styles.regionOption}>
+                      <input
+                        type="radio"
+                        name="region"
+                        value={region.value}
+                        checked={selectedRegion === region.value}
+                        onChange={(e) => setSelectedRegion(e.target.value)}
+                        className={styles.regionRadio}
+                      />
+                      <div className={styles.regionContent}>
+                        <div className={styles.regionTitle}>{region.label}</div>
+                        <div className={styles.regionDescription}>
+                          {region.description}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {error && <div className={styles.error}>{error}</div>}
 
               <button
                 type="submit"
                 className={styles.button}
-                disabled={isLoading}
+                disabled={isLoading || !username.trim() || !selectedRegion}
               >
                 {isLoading ? "Setting up..." : "Continue"}
               </button>

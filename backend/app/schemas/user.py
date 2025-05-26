@@ -16,6 +16,7 @@ class UserUpdate(BaseModel):
     """Schema for updating user information"""
     username: Optional[str] = Field(None, min_length=3, max_length=50)
     profile_picture: Optional[str] = None
+    riot_region: Optional[str] = Field(None, max_length=10)
     riot_id: Optional[str] = Field(None, max_length=100)
     riot_puuid: Optional[str] = Field(None, max_length=100)
     discord_id: Optional[str] = Field(None, max_length=100)
@@ -26,6 +27,7 @@ class UserInDB(UserBase):
     id: uuid.UUID
     username: Optional[str] = None
     profile_picture: Optional[str] = None
+    riot_region: Optional[str] = None
     riot_id: Optional[str] = None
     riot_puuid: Optional[str] = None
     verified_riot_account: bool = False
@@ -47,5 +49,7 @@ class UserResponse(BaseModel):
     verified_riot_account: bool = False
     discord_connected: bool = False
     riot_puuid: Optional[str] = None
+    riot_region: Optional[str] = None
+    
     class Config:
         from_attributes = True 

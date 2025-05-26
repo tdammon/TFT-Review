@@ -169,3 +169,70 @@
 .primaryButton .buttonIcon svg {
   transform: rotate(180deg); /* Makes the arrow point right */
 }
+
+/* Region Selection Styles */
+.regionSelection {
+  margin-bottom: 1rem;
+}
+
+.regionLabel {
+  display: block;
+  color: #ccc;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+  text-align: left;
+  font-weight: 500;
+}
+
+.regionOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.regionOption {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #444;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #1a1a1a;
+}
+
+.regionOption:hover {
+  border-color: #4a90e2;
+  background: #222;
+}
+
+.regionOption input[type="radio"]:checked + .regionContent .regionTitle {
+  color: #4a90e2;
+}
+
+.regionOption input[type="radio"]:checked {
+  accent-color: #4a90e2;
+}
+
+.regionRadio {
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+}
+
+.regionContent {
+  flex: 1;
+  text-align: left;
+}
+
+.regionTitle {
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.125rem;
+  font-size: 0.9rem;
+}
+
+.regionDescription {
+  color: #aaa;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}

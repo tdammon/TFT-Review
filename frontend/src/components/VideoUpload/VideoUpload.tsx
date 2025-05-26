@@ -83,9 +83,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         setError("Please select a valid video file");
         return;
       }
-      // Check file size (limit to 500MB)
-      if (file.size > 500 * 1024 * 1024) {
-        setError("File size should be less than 500MB");
+      // Check file size (limit to 1500MB)
+      if (file.size > 1500 * 1024 * 1024) {
+        setError("File size should be less than 1500MB (1.5GB)");
         return;
       }
       setSelectedFile(file);
