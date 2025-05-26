@@ -47,6 +47,12 @@ services:
         sync: false
       - key: RIOT_REDIRECT_URI
         value: https://bettertft.com/auth/riot/callback
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
     healthCheckPath: /api/v1/health
 
   - type: web
