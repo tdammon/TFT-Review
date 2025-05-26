@@ -1,6 +1,7 @@
 from fastapi import UploadFile
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.config import Config
 import os
 import asyncio
 from functools import partial
@@ -45,7 +46,12 @@ class WasabiStorageService:
             endpoint_url=self.endpoint_url,
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key,
-            region_name=self.region
+            region_name=self.region,
+            config=Config(
+                retries={'max_attempts': 3, 'mode': 'adaptive'},
+                max_pool_connections=50,
+                region_name=self.region
+            )
         )
         
         print(f"[WASABI] Initialized with bucket: {self.bucket_name}, region: {self.region}")
@@ -68,86 +74,25 @@ class WasabiStorageService:
             # Reset file pointer to beginning
             await file.seek(0)
             
-            # Prepare upload parameters (remove ACL since public access not allowed)
-            upload_params = {
-                'Bucket': self.bucket_name,
-                'Key': unique_filename,
-                'ExtraArgs': {
-                    'ContentType': file.content_type or 'video/mp4'
-                    # Removed 'ACL': 'public-read' since account doesn't allow public access
-                }
-            }
+            # Check file size to determine upload method
+            file_size = 0
+            try:
+                # Try to get file size
+                current_pos = file.file.tell()
+                file.file.seek(0, 2)  # Seek to end
+                file_size = file.file.tell()
+                file.file.seek(current_pos)  # Reset to original position
+                print(f"[WASABI] File size: {file_size / (1024*1024):.2f} MB")
+            except:
+                print(f"[WASABI] Could not determine file size")
             
-            # Upload with retry logic
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    print(f"[WASABI] Upload attempt {attempt + 1}/{max_retries}")
-                    upload_start = time.time()
-                    
-                    # Reset file pointer before each attempt
-                    await file.seek(0)
-                    
-                    # Use asyncio to run the blocking upload in a thread
-                    loop = asyncio.get_event_loop()
-                    upload_func = partial(
-                        self.s3_client.upload_fileobj,
-                        file.file,  # File object as second argument
-                        self.bucket_name,  # Bucket as third argument
-                        unique_filename,  # Key as fourth argument
-                        ExtraArgs=upload_params['ExtraArgs']  # Extra args separately
-                    )
-                    
-                    await asyncio.wait_for(
-                        loop.run_in_executor(None, upload_func),
-                        timeout=300.0  # 5 minute timeout
-                    )
-                    
-                    upload_duration = time.time() - upload_start
-                    print(f"[WASABI] Upload completed in {upload_duration:.2f} seconds")
-                    
-                    # Return the file key instead of generating a pre-signed URL
-                    # This allows us to generate fresh URLs on-demand
-                    print(f"[WASABI] Returning file key: {unique_filename}")
-                    
-                    total_duration = time.time() - start_time
-                    print(f"[WASABI] Total function duration: {total_duration:.2f} seconds")
-                    
-                    return unique_filename  # Return the key, not a pre-signed URL
-                    
-                except (ClientError, Exception) as e:
-                    attempt_duration = time.time() - upload_start if 'upload_start' in locals() else 0
-                    print(f"[WASABI] Attempt {attempt + 1} failed after {attempt_duration:.2f}s: {str(e)}")
-                    
-                    if attempt == max_retries - 1:  # Last attempt
-                        raise e
-                        
-                    # Wait before retry (exponential backoff)
-                    wait_time = 2 ** attempt  # 1s, 2s, 4s
-                    print(f"[WASABI] Waiting {wait_time}s before retry...")
-                    await asyncio.sleep(wait_time)
-        
-        except asyncio.TimeoutError:
-            duration = time.time() - start_time
-            print(f"[WASABI] TIMEOUT after {duration:.2f} seconds")
-            raise Exception(f"Wasabi upload timed out after multiple attempts. This may be due to network issues or file size.")
-            
-        except NoCredentialsError:
-            print(f"[WASABI] ERROR: Invalid credentials")
-            raise Exception("Invalid Wasabi credentials. Please check your access key and secret key.")
-            
-        except ClientError as e:
-            duration = time.time() - start_time
-            error_code = e.response['Error']['Code']
-            error_message = e.response['Error']['Message']
-            print(f"[WASABI] AWS ClientError after {duration:.2f} seconds: {error_code} - {error_message}")
-            
-            if error_code == 'NoSuchBucket':
-                raise Exception(f"Wasabi bucket '{self.bucket_name}' does not exist. Please create the bucket first.")
-            elif error_code == 'AccessDenied':
-                raise Exception("Access denied to Wasabi bucket. Please check your credentials and bucket permissions.")
+            # Use multipart upload for files larger than 100MB
+            if file_size > 100 * 1024 * 1024:  # 100MB
+                print(f"[WASABI] Using multipart upload for large file")
+                return await self._upload_multipart(file, unique_filename, file_size)
             else:
-                raise Exception(f"Wasabi upload failed: {error_message}")
+                print(f"[WASABI] Using standard upload")
+                return await self._upload_standard(file, unique_filename)
                 
         except Exception as e:
             duration = time.time() - start_time
@@ -161,6 +106,135 @@ class WasabiStorageService:
                 await file.seek(0)
             except:
                 pass
+
+    async def _upload_standard(self, file: UploadFile, unique_filename: str) -> str:
+        """Standard upload for smaller files"""
+        # Prepare upload parameters (remove ACL since public access not allowed)
+        upload_params = {
+            'ContentType': file.content_type or 'video/mp4'
+        }
+        
+        # Upload with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"[WASABI] Upload attempt {attempt + 1}/{max_retries}")
+                upload_start = time.time()
+                
+                # Reset file pointer before each attempt
+                await file.seek(0)
+                
+                # Use asyncio to run the blocking upload in a thread
+                loop = asyncio.get_event_loop()
+                upload_func = partial(
+                    self.s3_client.upload_fileobj,
+                    file.file,  # File object as second argument
+                    self.bucket_name,  # Bucket as third argument
+                    unique_filename,  # Key as fourth argument
+                    ExtraArgs=upload_params  # Extra args separately
+                )
+                
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, upload_func),
+                    timeout=120.0  # Reduced to 2 minutes for faster failure detection
+                )
+                
+                upload_duration = time.time() - upload_start
+                print(f"[WASABI] Upload completed in {upload_duration:.2f} seconds")
+                
+                return unique_filename  # Return the key, not a pre-signed URL
+                
+            except (ClientError, Exception) as e:
+                attempt_duration = time.time() - upload_start if 'upload_start' in locals() else 0
+                print(f"[WASABI] Attempt {attempt + 1} failed after {attempt_duration:.2f}s: {str(e)}")
+                
+                if attempt == max_retries - 1:  # Last attempt
+                    raise e
+                    
+                # Wait before retry (exponential backoff)
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                print(f"[WASABI] Waiting {wait_time}s before retry...")
+                await asyncio.sleep(wait_time)
+
+    async def _upload_multipart(self, file: UploadFile, unique_filename: str, file_size: int) -> str:
+        """Multipart upload for larger files"""
+        print(f"[WASABI] Starting multipart upload")
+        
+        try:
+            # Initiate multipart upload
+            loop = asyncio.get_event_loop()
+            
+            create_func = partial(
+                self.s3_client.create_multipart_upload,
+                Bucket=self.bucket_name,
+                Key=unique_filename,
+                ContentType=file.content_type or 'video/mp4'
+            )
+            
+            response = await loop.run_in_executor(None, create_func)
+            upload_id = response['UploadId']
+            print(f"[WASABI] Multipart upload initiated: {upload_id}")
+            
+            # Upload parts (5MB each)
+            part_size = 5 * 1024 * 1024  # 5MB
+            parts = []
+            part_number = 1
+            
+            await file.seek(0)
+            
+            while True:
+                chunk = await file.read(part_size)
+                if not chunk:
+                    break
+                
+                print(f"[WASABI] Uploading part {part_number} ({len(chunk)} bytes)")
+                
+                # Upload this part
+                upload_part_func = partial(
+                    self.s3_client.upload_part,
+                    Bucket=self.bucket_name,
+                    Key=unique_filename,
+                    PartNumber=part_number,
+                    UploadId=upload_id,
+                    Body=chunk
+                )
+                
+                part_response = await loop.run_in_executor(None, upload_part_func)
+                parts.append({
+                    'ETag': part_response['ETag'],
+                    'PartNumber': part_number
+                })
+                
+                part_number += 1
+            
+            # Complete multipart upload
+            complete_func = partial(
+                self.s3_client.complete_multipart_upload,
+                Bucket=self.bucket_name,
+                Key=unique_filename,
+                UploadId=upload_id,
+                MultipartUpload={'Parts': parts}
+            )
+            
+            await loop.run_in_executor(None, complete_func)
+            print(f"[WASABI] Multipart upload completed")
+            
+            return unique_filename
+            
+        except Exception as e:
+            # Abort multipart upload on error
+            try:
+                abort_func = partial(
+                    self.s3_client.abort_multipart_upload,
+                    Bucket=self.bucket_name,
+                    Key=unique_filename,
+                    UploadId=upload_id
+                )
+                await loop.run_in_executor(None, abort_func)
+                print(f"[WASABI] Aborted multipart upload due to error")
+            except:
+                pass
+            raise e
 
     def _get_file_extension(self, filename: Optional[str]) -> str:
         """Extract file extension from filename"""

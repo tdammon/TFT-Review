@@ -44,12 +44,18 @@ async def generate_thumbnail_from_file(video_file: UploadFile) -> Optional[str]:
                 temp_thumb_path = temp_thumb.name
         
         try:
-            # Reset file pointer and save video to temp file
+            # Reset file pointer and stream video to temp file (avoid loading entire file into memory)
             await video_file.seek(0)
-            video_content = await video_file.read()
             
+            print(f"[THUMBNAIL] Streaming video to temporary file...")
             with open(temp_video_path, 'wb') as f:
-                f.write(video_content)
+                # Stream the file in chunks instead of reading all at once
+                chunk_size = 1024 * 1024  # 1MB chunks
+                while True:
+                    chunk = await video_file.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
             
             print(f"[THUMBNAIL] Extracting frame using FFmpeg...")
             
@@ -89,14 +95,6 @@ async def generate_thumbnail_from_file(video_file: UploadFile) -> Optional[str]:
                 )
                 
                 await loop.run_in_executor(None, upload_func)
-            
-            # Generate pre-signed URL for thumbnail (valid for 7 days)
-            # Actually, let's return the key so we can generate fresh URLs on demand
-            # thumbnail_url = wasabi_storage.s3_client.generate_presigned_url(
-            #     'get_object',
-            #     Params={'Bucket': wasabi_storage.bucket_name, 'Key': thumbnail_key},
-            #     ExpiresIn=604800  # 7 days
-            # )
             
             print(f"[THUMBNAIL] Thumbnail uploaded successfully, returning key: {thumbnail_key}")
             return thumbnail_key  # Return the key, not the full URL

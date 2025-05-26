@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthToken } from "../../utils/auth";
 import api from "../../api/axios";
@@ -49,6 +49,19 @@ interface VideoUploadProps {
   onClose: () => void;
 }
 
+interface UploadStatus {
+  upload_id: string;
+  status:
+    | "uploading"
+    | "uploading_video"
+    | "generating_thumbnail"
+    | "completed"
+    | "error";
+  progress: number;
+  error?: string;
+  filename: string;
+}
+
 const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -56,11 +69,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState("");
-  // New states for the upload flow
-  const [uploadedVideoId, setUploadedVideoId] = useState<string | null>(null);
-  const [uploadComplete, setUploadComplete] = useState(false);
+
+  // New optimized upload states
+  const [uploadId, setUploadId] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null);
   const [showGameDetails, setShowGameDetails] = useState(false);
   const [showEventOption, setShowEventOption] = useState(false);
+  const [uploadedVideoId, setUploadedVideoId] = useState<string | null>(null);
 
   // Game details states
   const [gameVersion, setGameVersion] = useState("");
@@ -69,12 +84,23 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
   const [result, setResult] = useState("");
   const [encounter, setEncounter] = useState("");
   const [composition, setComposition] = useState("");
+  const [submittingDetails, setSubmittingDetails] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
   const { getToken } = useAuthToken();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const file = files[0];
@@ -88,18 +114,16 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         setError("File size should be less than 1500MB (1.5GB)");
         return;
       }
+
       setSelectedFile(file);
       setError("");
+
+      // Start upload immediately
+      await startUpload(file);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedFile) {
-      setError("Please select a video file");
-      return;
-    }
-
+  const startUpload = async (file: File) => {
     try {
       setUploading(true);
       setError("");
@@ -109,46 +133,89 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         throw new Error("Authentication failed");
       }
 
-      // Create form data
+      // Create form data for upload start
       const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("title", title);
-      formData.append("description", description);
+      formData.append("file", file);
 
-      // Upload the video
-      const response = await api.post("/api/v1/videos", formData, {
+      // Start the upload
+      const response = await api.post("/api/v1/videos/start-upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           Authorization: `Bearer ${token}`,
         },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / (progressEvent.total || 100)
-          );
-          setUploadProgress(percentCompleted);
-        },
       });
 
-      // Store the uploaded video ID and show the game details screen
-      setUploadedVideoId(response.data.id);
-      setUploadComplete(true);
+      const { upload_id } = response.data;
+      setUploadId(upload_id);
+
+      // Start polling for progress
+      startProgressPolling(upload_id);
+
+      // Move to game details screen immediately
       setShowGameDetails(true);
     } catch (error: any) {
-      console.error("Error uploading video:", error);
+      console.error("Error starting upload:", error);
       setError(
         error.response?.data?.detail ||
-          "Failed to upload video. Please try again."
+          "Failed to start upload. Please try again."
       );
-    } finally {
       setUploading(false);
     }
   };
 
-  // Handle submitting game details
+  const startProgressPolling = (uploadId: string) => {
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+
+        const response = await api.get(
+          `/api/v1/videos/upload-status/${uploadId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const status: UploadStatus = response.data;
+        setUploadStatus(status);
+        setUploadProgress(status.progress);
+
+        if (status.status === "completed" || status.status === "error") {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          setUploading(false);
+
+          if (status.status === "error") {
+            setError(status.error || "Upload failed");
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check upload status:", error);
+      }
+    }, 1000); // Poll every second
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setError("Please select a video file");
+      return;
+    }
+    // File selection now triggers immediate upload, so this is just for validation
+  };
+
+  // Handle submitting game details and completing upload
   const handleGameDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!uploadedVideoId) return;
+    if (!uploadId) {
+      setError("No upload in progress");
+      return;
+    }
 
     // Validate game version format
     if (!gameVersion.trim()) {
@@ -166,8 +233,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
     }
 
     try {
+      setSubmittingDetails(true);
       setError("");
       setGameVersionError("");
+
       const token = await getToken();
       if (!token) {
         throw new Error("Authentication failed");
@@ -178,31 +247,39 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         ? composition.split(",").map((item) => item.trim())
         : [];
 
-      // Update the video with game details
-      await api.patch(
-        `/api/v1/videos/${uploadedVideoId}`,
-        {
-          game_version: gameVersion.trim(),
-          rank: rank.trim() || null,
-          result: result.trim() || null,
-          composition: compositionArray.length > 0 ? compositionArray : null,
-        },
+      // Complete the upload with game details
+      const formData = new FormData();
+      formData.append("upload_id", uploadId);
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("game_version", gameVersion.trim());
+      formData.append("rank", rank.trim() || "");
+      formData.append("result", result.trim() || "");
+      formData.append("composition", compositionArray.join(","));
+
+      const response = await api.post(
+        "/api/v1/videos/complete-upload",
+        formData,
         {
           headers: {
+            "Content-Type": "multipart/form-data",
             Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      // Move to the events option screen
+      // Store the completed video ID and move to events option
+      setUploadedVideoId(response.data.id);
       setShowGameDetails(false);
       setShowEventOption(true);
     } catch (error: any) {
-      console.error("Error updating video details:", error);
+      console.error("Error completing upload:", error);
       setError(
         error.response?.data?.detail ||
-          "Failed to update video details. Please try again."
+          "Failed to complete upload. Please try again."
       );
+    } finally {
+      setSubmittingDetails(false);
     }
   };
 
@@ -233,16 +310,49 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // Cancel upload
+  const handleCancelUpload = async () => {
+    if (uploadId) {
+      try {
+        const token = await getToken();
+        if (token) {
+          await api.delete(`/api/v1/videos/upload/${uploadId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+        }
+      } catch (error) {
+        console.error("Failed to cancel upload:", error);
+      }
+    }
+
+    // Clean up
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    handleClose();
+  };
+
   // Reset the component state when closed
   const handleClose = () => {
+    // Clean up polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
     setTitle("");
     setDescription("");
     setSelectedFile(null);
     setUploading(false);
     setUploadProgress(0);
     setError("");
+    setUploadId(null);
+    setUploadStatus(null);
     setUploadedVideoId(null);
-    setUploadComplete(false);
     setShowGameDetails(false);
     setShowEventOption(false);
     setGameVersion("");
@@ -251,7 +361,26 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
     setResult("");
     setEncounter("");
     setComposition("");
+    setSubmittingDetails(false);
     onClose();
+  };
+
+  const getProgressMessage = () => {
+    if (!uploadStatus) return "Starting upload...";
+
+    switch (uploadStatus.status) {
+      case "uploading":
+      case "uploading_video":
+        return "Uploading video...";
+      case "generating_thumbnail":
+        return "Generating thumbnail...";
+      case "completed":
+        return "Upload completed!";
+      case "error":
+        return `Error: ${uploadStatus.error}`;
+      default:
+        return uploadStatus.status;
+    }
   };
 
   if (!isOpen) return null;
@@ -267,7 +396,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
               ? "Game Details"
               : "Upload Video"}
           </h2>
-          <button className={styles.closeButton} onClick={handleClose}>
+          <button
+            className={styles.closeButton}
+            onClick={uploading ? handleCancelUpload : handleClose}
+          >
             &times;
           </button>
         </div>
@@ -324,19 +456,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                   {selectedFile ? selectedFile.name : "No file selected"}
                 </span>
               </div>
+              <p className={styles.fileHint}>
+                Select a video file to start uploading immediately
+              </p>
             </div>
 
             {error && <div className={styles.error}>{error}</div>}
-
-            {uploading && (
-              <div className={styles.progressContainer}>
-                <div
-                  className={styles.progressBar}
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-                <span className={styles.progressText}>{uploadProgress}%</span>
-              </div>
-            )}
 
             <div className={styles.formActions}>
               <button
@@ -346,13 +471,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 disabled={uploading}
               >
                 Cancel
-              </button>
-              <button
-                type="submit"
-                className={styles.submitButton}
-                disabled={uploading || !selectedFile}
-              >
-                {uploading ? "Uploading..." : "Upload Video"}
               </button>
             </div>
           </form>
@@ -364,11 +482,29 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
           >
             <div className={styles.successMessage}>
               <div className={styles.checkmark}>✓</div>
-              <h3>Video uploaded successfully!</h3>
+              <h3>Upload started successfully!</h3>
               <p className={styles.instructionText}>
-                Add game details to help others find and understand your content
+                Fill out game details while your video uploads in the background
               </p>
             </div>
+
+            {/* Upload Progress */}
+            {/* <div className={styles.progressContainer}>
+              <div className={styles.progressHeader}>
+                <span className={styles.progressLabel}>
+                  {getProgressMessage()}
+                </span>
+                <span className={styles.progressPercent}>
+                  {uploadProgress}%
+                </span>
+              </div>
+              <div className={styles.progressBarContainer}>
+                <div
+                  className={styles.progressBar}
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div> */}
 
             <div className={styles.formGroup}>
               <label htmlFor="patchVersion">
@@ -379,6 +515,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 value={gameVersion}
                 onChange={(e) => setGameVersion(e.target.value)}
                 className={styles.selectInput}
+                disabled={submittingDetails}
               >
                 <option value="">Select Patch</option>
                 {PATCH_VERSIONS.map((patchOption) => (
@@ -387,6 +524,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                   </option>
                 ))}
               </select>
+              {gameVersionError && (
+                <div className={styles.fieldError}>{gameVersionError}</div>
+              )}
             </div>
 
             <div className={styles.formGroup}>
@@ -396,6 +536,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 value={rank}
                 onChange={(e) => setRank(e.target.value)}
                 className={styles.selectInput}
+                disabled={submittingDetails}
               >
                 <option value="">Select Rank</option>
                 {TFT_RANKS.map((rankOption) => (
@@ -413,6 +554,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 value={result}
                 onChange={(e) => setResult(e.target.value)}
                 className={styles.selectInput}
+                disabled={submittingDetails}
               >
                 <option value="">Select Finish Position</option>
                 {TFT_FINISHES.map((finishOption) => (
@@ -431,6 +573,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 value={encounter}
                 onChange={(e) => setEncounter(e.target.value)}
                 placeholder="e.g. Dragon, Noxus, etc."
+                disabled={submittingDetails}
               />
             </div>
 
@@ -442,6 +585,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 value={composition}
                 onChange={(e) => setComposition(e.target.value)}
                 placeholder="e.g. Sorcerer, 8 Hyperpop, etc. (separate with commas)"
+                disabled={submittingDetails}
               />
             </div>
 
@@ -452,11 +596,16 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 type="button"
                 onClick={handleSkipGameDetails}
                 className={styles.skipButton}
+                disabled={submittingDetails}
               >
                 Skip Details (Not Recommended)
               </button>
-              <button type="submit" className={styles.submitButton}>
-                Save and Continue
+              <button
+                type="submit"
+                className={styles.submitButton}
+                disabled={submittingDetails || !gameVersion.trim()}
+              >
+                {submittingDetails ? "Saving..." : "Save and Continue"}
               </button>
             </div>
           </form>
@@ -465,7 +614,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
           <div className={styles.eventOptionContainer}>
             <div className={styles.successMessage}>
               <div className={styles.checkmark}>✓</div>
-              <h3>Game details saved!</h3>
+              <h3>Video uploaded successfully!</h3>
+              <p className={styles.instructionText}>
+                Your video is now available and ready to view
+              </p>
             </div>
 
             <p className={styles.eventPrompt}>
@@ -483,6 +635,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
                 onClick={handleAddEvents}
               >
                 Add Key Moments
+              </button>
+              <button
+                className={styles.skipEventsButton}
+                onClick={handleSkipEvents}
+              >
+                View Video
               </button>
             </div>
           </div>
