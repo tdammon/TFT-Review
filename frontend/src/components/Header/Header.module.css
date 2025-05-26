@@ -27,6 +27,37 @@
   text-decoration: none;
 }
 
+.logo:hover {
+  color: #4a90e2;
+}
+
+.navigation {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ccc;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.navLink:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.navLink svg {
+  width: 18px;
+  height: 18px;
+}
+
 .right {
   display: flex;
   align-items: center;

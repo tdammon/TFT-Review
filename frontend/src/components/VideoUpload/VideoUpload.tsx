@@ -59,7 +59,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
   // New states for the upload flow
   const [uploadedVideoId, setUploadedVideoId] = useState<string | null>(null);
   const [uploadComplete, setUploadComplete] = useState(false);
-  const [showGameDetails, setShowGameDetails] = useState(true);
+  const [showGameDetails, setShowGameDetails] = useState(false);
   const [showEventOption, setShowEventOption] = useState(false);
 
   // Game details states

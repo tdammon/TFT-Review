@@ -18,7 +18,29 @@ const Header = () => {
 
   return (
     <header className={styles.header}>
-      <h1>Better TFT</h1>
+      <div className={styles.left}>
+        <Link to="/" className={styles.logo}>
+          Better TFT
+        </Link>
+        <nav className={styles.navigation}>
+          <Link to="/" className={styles.navLink}>
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span>Home</span>
+          </Link>
+        </nav>
+      </div>
       <div className={styles.userSection}>
         <span>Welcome, {user?.name}</span>
         <button className={styles.uploadButton} onClick={handleOpenUploadModal}>
