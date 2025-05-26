@@ -6,6 +6,7 @@ import os
 import uuid
 import shutil
 from datetime import datetime
+import time
 
 from ..db.database import get_db
 from ..models.comment import Comment
@@ -16,8 +17,9 @@ from ..schemas.video import VideoCreate, VideoResponse, VideoDetailResponse, Vid
 from ..schemas.comment import CommentCreate, CommentUpdate, CommentResponse
 from ..schemas.event import EventResponse
 from ..auth import get_current_user
-from ..services.storage import upload_to_cloud_storage
-from ..services.thumbnail import generate_thumbnail
+# from ..services.storage import upload_to_cloud_storage  # Old Cloudinary service
+from ..services.wasabi_storage import wasabi_storage  # New Wasabi service
+from ..services.thumbnail import generate_thumbnail, generate_thumbnail_from_file
 
 router = APIRouter(
     prefix="/videos",
@@ -43,30 +45,55 @@ async def upload_video(
 ):
     """
     Upload a new video file.
-    The video will be stored on Cloudinary and a record will be created in the database.
+    The video will be stored on Wasabi and a record will be created in the database.
     """
+    start_time = time.time()
+    print(f"[VIDEO_UPLOAD] Starting upload at {time.time()}")
+    print(f"[VIDEO_UPLOAD] User: {current_user.username if current_user else 'None'}")
+    print(f"[VIDEO_UPLOAD] File: {file.filename}, Content-Type: {file.content_type}")
+    print(f"[VIDEO_UPLOAD] Title: {title}")
+    
     # Validate file type
+    print(f"[VIDEO_UPLOAD] Validating file type...")
     if not file.content_type.startswith("video/"):
+        print(f"[VIDEO_UPLOAD] Invalid file type: {file.content_type}")
         raise HTTPException(status_code=400, detail="File must be a video")
     
     try:
-        # Upload to Cloudinary
-        video_url = await upload_to_cloud_storage(file)
+        print(f"[VIDEO_UPLOAD] Uploading to Wasabi...")
+        upload_start = time.time()
         
-        # Generate thumbnail
-        thumbnail_url = await generate_thumbnail(video_url)
+        # Upload to Wasabi and get the file key
+        file_key = await wasabi_storage.upload_video(file)
+        
+        upload_duration = time.time() - upload_start
+        print(f"[VIDEO_UPLOAD] Wasabi upload completed in {upload_duration:.2f} seconds")
+        print(f"[VIDEO_UPLOAD] Stored file key: {file_key}")
+        
+        # Generate thumbnail from the uploaded file
+        print(f"[VIDEO_UPLOAD] Generating thumbnail...")
+        thumbnail_start = time.time()
+        thumbnail_url = await generate_thumbnail_from_file(file)
+        thumbnail_end = time.time()
+        if thumbnail_url:
+            print(f"[VIDEO_UPLOAD] Thumbnail generated in {thumbnail_end - thumbnail_start:.2f}s")
+        else:
+            print(f"[VIDEO_UPLOAD] Thumbnail generation failed or skipped")
         
         # Parse composition if provided
+        print(f"[VIDEO_UPLOAD] Parsing composition...")
         composition_list = None
         if composition:
             composition_list = [item.strip() for item in composition.split(",") if item.strip()]
         
-        # Create video record in database
+        # Create video record in database with file key (not full URL)
+        print(f"[VIDEO_UPLOAD] Creating database record...")
+        db_start = time.time()
         new_video = Video(
             title=title,
             description=description,
-            file_path="",  # Not needed with Cloudinary
-            video_url=video_url,
+            file_path="",  # Not needed with Wasabi
+            video_url=file_key,  # Store the file key, not the full URL
             thumbnail_url=thumbnail_url,
             visibility=visibility,
             user_id=current_user.id,
@@ -80,9 +107,40 @@ async def upload_video(
         db.commit()
         db.refresh(new_video)
         
-        return new_video
+        db_end = time.time()
+        print(f"[VIDEO_UPLOAD] Database operations completed in {db_end - db_start:.2f}s")
+        
+        total_time = time.time() - start_time
+        print(f"[VIDEO_UPLOAD] Total upload completed in {total_time:.2f}s")
+        
+        # Generate fresh URLs for the response
+        response_video = VideoResponse.model_validate(new_video)
+        response_dict = response_video.model_dump()
+        
+        # Add fresh video URL
+        if new_video.video_url:
+            try:
+                fresh_video_url = await wasabi_storage.get_video_url(new_video.video_url)
+                response_dict["video_url"] = fresh_video_url
+            except Exception as e:
+                print(f"[VIDEO_UPLOAD] Error generating fresh video URL: {str(e)}")
+        
+        # Add fresh thumbnail URL
+        if new_video.thumbnail_url:
+            try:
+                fresh_thumbnail_url = await wasabi_storage.get_video_url(new_video.thumbnail_url)
+                response_dict["thumbnail_url"] = fresh_thumbnail_url
+            except Exception as e:
+                print(f"[VIDEO_UPLOAD] Error generating fresh thumbnail URL: {str(e)}")
+        
+        return VideoResponse.model_validate(response_dict)
         
     except Exception as e:
+        error_time = time.time() - start_time
+        print(f"[VIDEO_UPLOAD] Error after {error_time:.2f}s: {str(e)}")
+        print(f"[VIDEO_UPLOAD] Exception type: {type(e).__name__}")
+        import traceback
+        print(f"[VIDEO_UPLOAD] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to upload video: {str(e)}")
 
 @router.get("/", response_model=List[VideoResponse])
@@ -100,11 +158,24 @@ async def get_videos(
         (Video.user_id == current_user.id)
     ).offset(skip).limit(limit).all()
     
-    # Add username to each video
+    # Generate fresh pre-signed URLs for all videos and thumbnails
+    file_keys = [video.video_url for video in videos if video.video_url]
+    thumbnail_keys = [video.thumbnail_url for video in videos if video.thumbnail_url]
+    
+    fresh_urls = await wasabi_storage.get_multiple_video_urls(file_keys) if file_keys else {}
+    fresh_thumbnail_urls = await wasabi_storage.get_multiple_video_urls(thumbnail_keys) if thumbnail_keys else {}
+    
+    # Add username and fresh URLs to each video
     video_responses = []
     for video in videos:
         video_dict = VideoResponse.model_validate(video).model_dump()
         video_dict["user_username"] = video.user.username if video.user else "Unknown"
+        # Replace stored file key with fresh pre-signed URL
+        if video.video_url and video.video_url in fresh_urls:
+            video_dict["video_url"] = fresh_urls[video.video_url]
+        # Replace stored thumbnail key with fresh pre-signed URL
+        if video.thumbnail_url and video.thumbnail_url in fresh_thumbnail_urls:
+            video_dict["thumbnail_url"] = fresh_thumbnail_urls[video.thumbnail_url]
         video_responses.append(VideoResponse.model_validate(video_dict))
     
     return video_responses
@@ -119,11 +190,24 @@ async def get_my_videos(
     """Get videos uploaded by the current user"""
     videos = db.query(Video).filter(Video.user_id == current_user.id).offset(skip).limit(limit).all()
     
-    # Add username to each video
+    # Generate fresh pre-signed URLs for all videos and thumbnails
+    file_keys = [video.video_url for video in videos if video.video_url]
+    thumbnail_keys = [video.thumbnail_url for video in videos if video.thumbnail_url]
+    
+    fresh_urls = await wasabi_storage.get_multiple_video_urls(file_keys) if file_keys else {}
+    fresh_thumbnail_urls = await wasabi_storage.get_multiple_video_urls(thumbnail_keys) if thumbnail_keys else {}
+    
+    # Add username and fresh URLs to each video
     video_responses = []
     for video in videos:
         video_dict = VideoResponse.model_validate(video).model_dump()
         video_dict["user_username"] = current_user.username
+        # Replace stored file key with fresh pre-signed URL
+        if video.video_url and video.video_url in fresh_urls:
+            video_dict["video_url"] = fresh_urls[video.video_url]
+        # Replace stored thumbnail key with fresh pre-signed URL
+        if video.thumbnail_url and video.thumbnail_url in fresh_thumbnail_urls:
+            video_dict["thumbnail_url"] = fresh_thumbnail_urls[video.thumbnail_url]
         video_responses.append(VideoResponse.model_validate(video_dict))
     
     return video_responses
@@ -190,9 +274,27 @@ async def get_video(
       )
       event_responses.append(event_response)
     
-    # Create video response with username
+    # Create video response with username and fresh URLs
     video_dict = VideoResponse.model_validate(video).model_dump()
     video_dict["user_username"] = video.user.username if video.user else "Unknown"
+    
+    # Generate fresh pre-signed URLs for video and thumbnail
+    if video.video_url:
+        try:
+            fresh_video_url = await wasabi_storage.get_video_url(video.video_url)
+            video_dict["video_url"] = fresh_video_url
+        except Exception as e:
+            print(f"[VIDEO_DETAIL] Error generating fresh video URL: {str(e)}")
+            # Keep the original key as fallback
+    
+    if video.thumbnail_url:
+        try:
+            fresh_thumbnail_url = await wasabi_storage.get_video_url(video.thumbnail_url)
+            video_dict["thumbnail_url"] = fresh_thumbnail_url
+        except Exception as e:
+            print(f"[VIDEO_DETAIL] Error generating fresh thumbnail URL: {str(e)}")
+            # Keep the original key as fallback
+    
     video_data = VideoResponse.model_validate(video_dict)
     
     # Create the detailed response with comments and events
@@ -243,8 +345,16 @@ async def stream_video(
     video.views += 1
     db.commit()
     
-    # Return the streaming URL
-    return {"url": video.video_url}
+    # Generate fresh pre-signed URL from the stored file key
+    try:
+        print(f"[VIDEO_STREAM] Generating fresh pre-signed URL for: {video.video_url}")
+        fresh_url = await wasabi_storage.get_video_url(video.video_url)
+        print(f"[VIDEO_STREAM] Generated fresh URL")
+        return {"url": fresh_url}
+    except Exception as e:
+        print(f"[VIDEO_STREAM] Error generating fresh URL: {str(e)}")
+        # Fallback to stored URL (might be expired but better than nothing)
+        return {"url": video.video_url}
 
 @router.patch("/{video_id}", response_model=VideoResponse)
 async def update_video(

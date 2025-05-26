@@ -53,6 +53,16 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: WASABI_ACCESS_KEY_ID
+        sync: false
+      - key: WASABI_SECRET_ACCESS_KEY
+        sync: false
+      - key: WASABI_BUCKET_NAME
+        sync: false
+      - key: WASABI_REGION
+        value: us-central-1
+      - key: WASABI_ENDPOINT_URL
+        value: https://s3.us-central-1.wasabisys.com
     healthCheckPath: /api/v1/health
 
   - type: web
