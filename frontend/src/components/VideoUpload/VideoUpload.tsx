@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthToken } from "../../utils/auth";
 import api from "../../api/axios";
 import styles from "./VideoUpload.module.css";
+import UploadProgress from "./UploadProgress";
 
 // Array of TFT ranks
 const TFT_RANKS = [
@@ -43,6 +44,20 @@ const TFT_FINISHES = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
 
 // Array of Patch Versions
 const PATCH_VERSIONS = ["14.4", "14.3", "14.2", "14.1", "14.0"];
+
+interface ChunkedUploadResponse {
+  upload_id: string;
+  chunk_size: number;
+  total_chunks: number;
+  presigned_urls: { [key: number]: string };
+}
+
+interface ChunkUploadProgress {
+  chunkNumber: number;
+  status: "pending" | "uploading" | "completed" | "error";
+  progress: number;
+  etag?: string;
+}
 
 interface VideoUploadProps {
   isOpen: boolean;
@@ -86,6 +101,19 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
   const [composition, setComposition] = useState("");
   const [submittingDetails, setSubmittingDetails] = useState(false);
 
+  // New state for chunked upload
+  const [chunks, setChunks] = useState<ChunkUploadProgress[]>([]);
+  const [uploadingChunks, setUploadingChunks] = useState(false);
+  const [currentChunk, setCurrentChunk] = useState(0);
+  const [chunkSize] = useState(5 * 1024 * 1024); // 5MB chunks
+  const [totalChunks, setTotalChunks] = useState(0);
+  const [chunkUploadProgress, setChunkUploadProgress] = useState<{
+    [key: number]: number;
+  }>({});
+  const [uploadedEtags, setUploadedEtags] = useState<{ [key: number]: string }>(
+    {}
+  );
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
@@ -118,12 +146,27 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
       setSelectedFile(file);
       setError("");
 
-      // Start upload immediately
-      await startUpload(file);
+      // Calculate total chunks
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      setTotalChunks(totalChunks);
+
+      // Initialize chunk progress
+      const initialChunks: ChunkUploadProgress[] = Array.from(
+        { length: totalChunks },
+        (_, i) => ({
+          chunkNumber: i + 1,
+          status: "pending",
+          progress: 0,
+        })
+      );
+      setChunks(initialChunks);
+
+      // Start chunked upload
+      await startChunkedUpload(file);
     }
   };
 
-  const startUpload = async (file: File) => {
+  const startChunkedUpload = async (file: File) => {
     try {
       setUploading(true);
       setError("");
@@ -133,70 +176,275 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         throw new Error("Authentication failed");
       }
 
-      // Create form data for upload start
-      const formData = new FormData();
-      formData.append("file", file);
-
-      // Start the upload
-      const response = await api.post("/api/v1/videos/start-upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          Authorization: `Bearer ${token}`,
+      // Initiate chunked upload
+      const response = await api.post<ChunkedUploadResponse>(
+        "/api/v1/videos/initiate-chunked-upload",
+        {
+          filename: file.name,
+          content_type: file.type,
+          total_size: file.size,
+          chunk_size: chunkSize,
         },
-      });
-
-      const { upload_id } = response.data;
-      setUploadId(upload_id);
-
-      // Start polling for progress
-      startProgressPolling(upload_id);
-
-      // Move to game details screen immediately
-      setShowGameDetails(true);
-    } catch (error: any) {
-      console.error("Error starting upload:", error);
-      setError(
-        error.response?.data?.detail ||
-          "Failed to start upload. Please try again."
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
+
+      console.log("[UPLOAD_ID] Setting upload_id:", response.data.upload_id);
+      setUploadId(response.data.upload_id);
+
+      // Start uploading chunks in the background
+      uploadChunks(
+        file,
+        response.data.presigned_urls,
+        response.data.upload_id
+      ).catch((error) => {
+        console.error("[UPLOAD] Chunk upload failed:", error);
+        setError("Failed to upload video chunks. Please try again.");
+        setShowGameDetails(false);
+      });
+    } catch (error: any) {
+      console.error(
+        "[UPLOAD] Error starting chunked upload:",
+        error?.response?.data || error
+      );
+
+      // Handle validation error array
+      if (Array.isArray(error?.response?.data?.detail)) {
+        const validationErrors = error.response.data.detail;
+        const errorMessages = validationErrors
+          .map((err: any) => err.msg)
+          .join(", ");
+        setError(`Upload failed: ${errorMessages}`);
+      } else if (typeof error?.response?.data?.detail === "string") {
+        // Handle string error message
+        setError(error.response.data.detail);
+      } else if (error?.message) {
+        // Handle error object with message
+        setError(error.message);
+      } else {
+        // Handle generic error
+        setError("Failed to start upload. Please try again.");
+      }
       setUploading(false);
     }
   };
 
-  const startProgressPolling = (uploadId: string) => {
-    pollIntervalRef.current = setInterval(async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
+  // Add effect to track uploadId changes
+  useEffect(() => {
+    console.log("[UPLOAD_ID] Upload ID changed:", uploadId);
+  }, [uploadId]);
 
-        const response = await api.get(
-          `/api/v1/videos/upload-status/${uploadId}`,
+  // Add effect to track showGameDetails changes
+  useEffect(() => {
+    console.log("[GAME_DETAILS] Show game details changed:", {
+      showGameDetails,
+      currentUploadId: uploadId,
+    });
+  }, [showGameDetails, uploadId]);
+
+  const uploadChunks = async (
+    file: File,
+    presignedUrls: { [key: number]: string },
+    newUploadId: string
+  ) => {
+    setUploadingChunks(true);
+    const etags: { [key: number]: string } = {};
+
+    try {
+      console.log("[UPLOAD] Starting chunk upload process", {
+        totalChunks,
+        chunkSize,
+        fileSize: file.size,
+        fileName: file.name,
+        fileType: file.type,
+      });
+
+      // Upload chunks in parallel with a limit of 3 concurrent uploads
+      const chunkNumbers = Object.keys(presignedUrls).map(Number);
+      const concurrentLimit = 3;
+
+      for (let i = 0; i < chunkNumbers.length; i += concurrentLimit) {
+        const chunkBatch = chunkNumbers.slice(i, i + concurrentLimit);
+        console.log(`[UPLOAD] Processing batch ${i / concurrentLimit + 1}`, {
+          chunkBatch,
+        });
+
+        await Promise.all(
+          chunkBatch.map(async (chunkNumber) => {
+            const start = (chunkNumber - 1) * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const chunk = file.slice(start, end);
+
+            console.log(`[UPLOAD] Uploading chunk ${chunkNumber}`, {
+              start,
+              end,
+              size: chunk.size,
+              type: chunk.type,
+            });
+
+            try {
+              const response = await fetch(presignedUrls[chunkNumber], {
+                method: "PUT",
+                body: chunk,
+                headers: {
+                  "Content-Type": file.type,
+                },
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[UPLOAD] Chunk ${chunkNumber} upload failed`, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  responseText: errorText,
+                  headers: Object.fromEntries(response.headers.entries()),
+                });
+                throw new Error(
+                  `Failed to upload chunk ${chunkNumber}: ${response.statusText}`
+                );
+              }
+
+              // Get ETag from response headers and clean it
+              const etag = response.headers.get("ETag");
+              console.log(`[UPLOAD] Chunk ${chunkNumber} response headers:`, {
+                headers: Object.fromEntries(response.headers.entries()),
+                etag,
+              });
+
+              if (etag) {
+                // Remove quotes and store with numeric key
+                const cleanEtag = etag.replace(/^"|"$/g, "");
+                etags[chunkNumber] = cleanEtag;
+                setUploadedEtags((prev) => ({
+                  ...prev,
+                  [chunkNumber]: cleanEtag,
+                }));
+
+                console.log(
+                  `[UPLOAD] Chunk ${chunkNumber} uploaded successfully`,
+                  {
+                    originalEtag: etag,
+                    cleanEtag,
+                    storedEtags: etags,
+                  }
+                );
+              } else {
+                console.error(
+                  `[UPLOAD] No ETag received for chunk ${chunkNumber}`
+                );
+                throw new Error(`No ETag received for chunk ${chunkNumber}`);
+              }
+
+              // Update chunk status
+              setChunks((prev) =>
+                prev.map((c) =>
+                  c.chunkNumber === chunkNumber
+                    ? { ...c, status: "completed", progress: 100 }
+                    : c
+                )
+              );
+
+              // Update overall progress
+              const totalProgress =
+                (Object.keys(etags).length / totalChunks) * 100;
+              setUploadProgress(totalProgress);
+            } catch (error: any) {
+              console.error(`[UPLOAD] Error uploading chunk ${chunkNumber}:`, {
+                error,
+                errorMessage: error?.message,
+                errorStack: error?.stack,
+              });
+              setChunks((prev) =>
+                prev.map((c) =>
+                  c.chunkNumber === chunkNumber
+                    ? { ...c, status: "error", progress: 0 }
+                    : c
+                )
+              );
+              throw error;
+            }
+          })
+        );
+      }
+
+      // Debug log before completing
+      console.log("[UPLOAD] Preparing to complete upload", {
+        upload_id: newUploadId,
+        total_chunks: totalChunks,
+        etags: etags,
+        etagsLength: Object.keys(etags).length,
+        allChunksUploaded: Object.keys(etags).length === totalChunks,
+      });
+
+      // Complete the upload
+      try {
+        const response = await api.post(
+          "/api/v1/videos/complete-chunked-upload",
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            upload_id: newUploadId,
+            total_chunks: totalChunks,
+            etags: etags,
+          },
+          {
+            headers: { Authorization: `Bearer ${await getToken()}` },
           }
         );
+        console.log("[UPLOAD] Upload completed successfully", {
+          response: response.data,
+        });
 
-        const status: UploadStatus = response.data;
-        setUploadStatus(status);
-        setUploadProgress(status.progress);
-
-        if (status.status === "completed" || status.status === "error") {
-          if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
-          }
-          setUploading(false);
-
-          if (status.status === "error") {
-            setError(status.error || "Upload failed");
-          }
-        }
-      } catch (error) {
-        console.error("Failed to check upload status:", error);
+        // Reset upload states after successful completion
+        setUploadingChunks(false);
+        setUploading(false);
+        setUploadProgress(100);
+      } catch (error: any) {
+        console.error("[UPLOAD] Error completing upload:", {
+          error,
+          errorResponse: error?.response?.data,
+          errorStatus: error?.response?.status,
+          requestData: {
+            upload_id: newUploadId,
+            total_chunks: totalChunks,
+            etags: etags,
+          },
+        });
+        throw error;
       }
-    }, 1000); // Poll every second
+
+      setUploadingChunks(false);
+      setUploadProgress(100);
+    } catch (error: any) {
+      console.error("[UPLOAD] Fatal error in chunk upload:", {
+        error,
+        errorMessage: error?.message,
+        errorStack: error?.stack,
+        uploadState: {
+          uploadId,
+          totalChunks,
+          completedChunks: Object.keys(etags).length,
+          chunks: chunks.map((c) => ({
+            number: c.chunkNumber,
+            status: c.status,
+          })),
+        },
+      });
+
+      // Format error message
+      let errorMessage = "Failed to upload video chunks. ";
+      if (error?.message) {
+        errorMessage += error.message;
+      } else if (Array.isArray(error?.response?.data?.detail)) {
+        const validationErrors = error.response.data.detail;
+        errorMessage += validationErrors.map((err: any) => err.msg).join(", ");
+      } else if (typeof error?.response?.data?.detail === "string") {
+        errorMessage += error.response.data.detail;
+      }
+
+      setError(errorMessage);
+      setUploadingChunks(false);
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -212,8 +460,17 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
   const handleGameDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!uploadId) {
-      setError("No upload in progress");
+    console.log("[GAME_DETAILS] Submitting details with upload_id:", {
+      uploadId,
+      type: typeof uploadId,
+    });
+
+    if (!uploadId || typeof uploadId !== "string") {
+      console.error("[GAME_DETAILS] Invalid upload_id:", {
+        uploadId,
+        type: typeof uploadId,
+      });
+      setError("Invalid upload ID. Please try uploading again.");
       return;
     }
 
@@ -237,6 +494,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
       setError("");
       setGameVersionError("");
 
+      // Check if chunks are still uploading
+      if (uploadingChunks) {
+        setError(
+          "Please wait for the video upload to complete before saving details."
+        );
+        setSubmittingDetails(false);
+        return;
+      }
+
       const token = await getToken();
       if (!token) {
         throw new Error("Authentication failed");
@@ -250,15 +516,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
       // Complete the upload with game details
       const formData = new FormData();
       formData.append("upload_id", uploadId);
-      formData.append("title", title);
-      formData.append("description", description);
+      formData.append("title", title || "Untitled"); // Ensure title is never empty
+      formData.append("description", description || "");
       formData.append("game_version", gameVersion.trim());
       formData.append("rank", rank.trim() || "");
       formData.append("result", result.trim() || "");
       formData.append("composition", compositionArray.join(","));
 
       const response = await api.post(
-        "/api/v1/videos/complete-upload",
+        "/api/v1/videos/complete-chunked-upload-details",
         formData,
         {
           headers: {
@@ -273,11 +539,25 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
       setShowGameDetails(false);
       setShowEventOption(true);
     } catch (error: any) {
-      console.error("Error completing upload:", error);
-      setError(
-        error.response?.data?.detail ||
-          "Failed to complete upload. Please try again."
+      console.error(
+        "[GAME_DETAILS] Error completing upload:",
+        error?.response?.data || error
       );
+
+      // Handle validation error array
+      if (Array.isArray(error?.response?.data?.detail)) {
+        const validationErrors = error.response.data.detail;
+        const errorMessages = validationErrors
+          .map((err: any) => err.msg)
+          .join(", ");
+        setError(`Validation error: ${errorMessages}`);
+      } else if (typeof error?.response?.data?.detail === "string") {
+        // Handle string error message
+        setError(error.response.data.detail);
+      } else {
+        // Handle generic error
+        setError("Failed to complete upload. Please try again.");
+      }
     } finally {
       setSubmittingDetails(false);
     }
@@ -343,6 +623,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    console.log("handleClose");
 
     setTitle("");
     setDescription("");
@@ -378,8 +659,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         return "Upload completed!";
       case "error":
         return `Error: ${uploadStatus.error}`;
-      default:
-        return uploadStatus.status;
     }
   };
 
@@ -391,136 +670,70 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
         <div className={styles.modalHeader}>
           <h2>
             {showEventOption
-              ? "Add Key Moments"
+              ? "Add Events"
               : showGameDetails
               ? "Game Details"
               : "Upload Video"}
           </h2>
-          <button
-            className={styles.closeButton}
-            onClick={uploading ? handleCancelUpload : handleClose}
-          >
-            &times;
+          <button className={styles.closeButton} onClick={handleClose}>
+            ×
           </button>
         </div>
 
-        {!showGameDetails && !showEventOption ? (
-          // Upload Form
-          <form onSubmit={handleSubmit} className={styles.uploadForm}>
-            <div className={styles.formGroup}>
-              <label htmlFor="title">Title</label>
-              <input
-                type="text"
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter video title"
-                required
-                disabled={uploading}
-              />
+        {showEventOption ? (
+          <div className={styles.eventOptionContainer}>
+            <div className={styles.successMessage}>
+              <div className={styles.checkmark}>✓</div>
+              <h3>Video Upload Complete!</h3>
             </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Enter video description"
-                rows={4}
-                disabled={uploading}
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="video">Video File</label>
-              <div className={styles.fileInputWrapper}>
-                <input
-                  type="file"
-                  id="video"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="video/*"
-                  className={styles.fileInput}
-                  disabled={uploading}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className={styles.browseButton}
-                  disabled={uploading}
-                >
-                  Browse Files
-                </button>
-                <span className={styles.fileName}>
-                  {selectedFile ? selectedFile.name : "No file selected"}
-                </span>
-              </div>
-              <p className={styles.fileHint}>
-                Select a video file to start uploading immediately
-              </p>
-            </div>
-
-            {error && <div className={styles.error}>{error}</div>}
-
-            <div className={styles.formActions}>
+            <p className={styles.eventPrompt}>
+              Would you like to add events to your video now?
+              <span className={styles.eventPromptDetail}>
+                Events help others navigate through important moments in your
+                gameplay.
+              </span>
+            </p>
+            <div className={styles.eventOptionButtons}>
+              <button className={styles.skipButton} onClick={handleSkipEvents}>
+                Skip for Now
+              </button>
               <button
-                type="button"
-                onClick={handleClose}
-                className={styles.cancelButton}
-                disabled={uploading}
+                className={styles.addEventsButton}
+                onClick={handleAddEvents}
               >
-                Cancel
+                Add Events
               </button>
             </div>
-          </form>
+          </div>
         ) : showGameDetails ? (
-          // Game Details Form
           <form
             onSubmit={handleGameDetailsSubmit}
             className={styles.uploadForm}
           >
-            <div className={styles.successMessage}>
-              <div className={styles.checkmark}>✓</div>
-              <h3>Upload started successfully!</h3>
-              <p className={styles.instructionText}>
-                Fill out game details while your video uploads in the background
-              </p>
-            </div>
-
-            {/* Upload Progress */}
-            {/* <div className={styles.progressContainer}>
-              <div className={styles.progressHeader}>
-                <span className={styles.progressLabel}>
-                  {getProgressMessage()}
-                </span>
-                <span className={styles.progressPercent}>
-                  {uploadProgress}%
-                </span>
-              </div>
-              <div className={styles.progressBarContainer}>
-                <div
-                  className={styles.progressBar}
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-              </div>
-            </div> */}
+            {(uploading || uploadingChunks) && (
+              <UploadProgress
+                chunks={chunks}
+                totalChunks={totalChunks}
+                uploadProgress={uploadProgress}
+                isUploading={uploadingChunks}
+              />
+            )}
 
             <div className={styles.formGroup}>
-              <label htmlFor="patchVersion">
-                Patch <span className={styles.requiredField}>*</span>
+              <label>
+                Patch Version <span className={styles.requiredField}>*</span>
               </label>
               <select
-                id="patchVersion"
+                className={`${styles.selectInput} ${
+                  gameVersionError ? styles.inputError : ""
+                }`}
                 value={gameVersion}
                 onChange={(e) => setGameVersion(e.target.value)}
-                className={styles.selectInput}
-                disabled={submittingDetails}
               >
-                <option value="">Select Patch</option>
-                {PATCH_VERSIONS.map((patchOption) => (
-                  <option key={patchOption} value={patchOption}>
-                    {patchOption}
+                <option value="">Select Patch Version</option>
+                {PATCH_VERSIONS.map((version) => (
+                  <option key={version} value={version}>
+                    {version}
                   </option>
                 ))}
               </select>
@@ -530,62 +743,44 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="rank">Rank</label>
+              <label>Rank</label>
               <select
-                id="rank"
+                className={styles.selectInput}
                 value={rank}
                 onChange={(e) => setRank(e.target.value)}
-                className={styles.selectInput}
-                disabled={submittingDetails}
               >
                 <option value="">Select Rank</option>
-                {TFT_RANKS.map((rankOption) => (
-                  <option key={rankOption} value={rankOption}>
-                    {rankOption}
+                {TFT_RANKS.map((rank) => (
+                  <option key={rank} value={rank}>
+                    {rank}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="result">Finish</label>
+              <label>Result</label>
               <select
-                id="result"
+                className={styles.selectInput}
                 value={result}
                 onChange={(e) => setResult(e.target.value)}
-                className={styles.selectInput}
-                disabled={submittingDetails}
               >
-                <option value="">Select Finish Position</option>
-                {TFT_FINISHES.map((finishOption) => (
-                  <option key={finishOption} value={finishOption}>
-                    {finishOption}
+                <option value="">Select Result</option>
+                {TFT_FINISHES.map((finish) => (
+                  <option key={finish} value={finish}>
+                    {finish}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="encounter">Encounter (Optional)</label>
+              <label>Composition</label>
               <input
                 type="text"
-                id="encounter"
-                value={encounter}
-                onChange={(e) => setEncounter(e.target.value)}
-                placeholder="e.g. Dragon, Noxus, etc."
-                disabled={submittingDetails}
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="composition">Build (Optional)</label>
-              <input
-                type="text"
-                id="composition"
                 value={composition}
                 onChange={(e) => setComposition(e.target.value)}
-                placeholder="e.g. Sorcerer, 8 Hyperpop, etc. (separate with commas)"
-                disabled={submittingDetails}
+                placeholder="Enter composition (comma-separated)"
               />
             </div>
 
@@ -594,56 +789,106 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ isOpen, onClose }) => {
             <div className={styles.formActions}>
               <button
                 type="button"
+                className={styles.cancelButton}
                 onClick={handleSkipGameDetails}
-                className={styles.skipButton}
                 disabled={submittingDetails}
               >
-                Skip Details (Not Recommended)
+                Skip
               </button>
               <button
                 type="submit"
                 className={styles.submitButton}
-                disabled={submittingDetails || !gameVersion.trim()}
+                disabled={submittingDetails || uploadingChunks || uploading}
               >
-                {submittingDetails ? "Saving..." : "Save and Continue"}
+                {submittingDetails
+                  ? "Saving..."
+                  : uploadingChunks || uploading
+                  ? "Please wait for upload to complete..."
+                  : "Save Details"}
               </button>
             </div>
           </form>
         ) : (
-          // Event Creation Option Screen
-          <div className={styles.eventOptionContainer}>
-            <div className={styles.successMessage}>
-              <div className={styles.checkmark}>✓</div>
-              <h3>Video uploaded successfully!</h3>
-              <p className={styles.instructionText}>
-                Your video is now available and ready to view
-              </p>
+          <form onSubmit={handleSubmit} className={styles.uploadForm}>
+            <div className={styles.formGroup}>
+              <label>Upload Video File</label>
+              <div className={styles.fileInputWrapper}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className={styles.fileInput}
+                  onChange={handleFileChange}
+                  accept="video/*"
+                  disabled={uploading}
+                />
+                <button
+                  type="button"
+                  className={styles.browseButton}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  Browse
+                </button>
+                {selectedFile && (
+                  <span className={styles.fileName}>{selectedFile.name}</span>
+                )}
+              </div>
             </div>
 
-            <p className={styles.eventPrompt}>
-              Would you like to add key moments to your video now?
-              <br />
-              <span className={styles.eventPromptDetail}>
-                Key moments help viewers navigate to important parts of your
-                video.
-              </span>
-            </p>
-
-            <div className={styles.eventOptionButtons}>
-              <button
-                className={styles.addEventsButton}
-                onClick={handleAddEvents}
-              >
-                Add Key Moments
-              </button>
-              <button
-                className={styles.skipEventsButton}
-                onClick={handleSkipEvents}
-              >
-                View Video
-              </button>
+            <div className={styles.formGroup}>
+              <label>
+                Title <span className={styles.requiredField}>*</span>
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter video title"
+                required
+              />
             </div>
-          </div>
+
+            <div className={styles.formGroup}>
+              <label>
+                Description <span className={styles.requiredField}>*</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Enter video description"
+                required
+              />
+            </div>
+
+            {error && <div className={styles.error}>{error}</div>}
+
+            <div className={styles.formActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={handleCancelUpload}
+              >
+                Cancel
+              </button>
+              {selectedFile && title.trim() && description.trim() ? (
+                <button
+                  type="button"
+                  className={styles.submitButton}
+                  onClick={() => setShowGameDetails(true)}
+                >
+                  Continue to Game Details
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className={styles.submitButton}
+                  disabled={!selectedFile}
+                >
+                  {uploading ? "Uploading..." : "Upload Video"}
+                </button>
+              )}
+            </div>
+          </form>
         )}
       </div>
     </div>

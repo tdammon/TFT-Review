@@ -1,0 +1,121 @@
+.progressWrapper {
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.progressInfo {
+  margin-bottom: 1rem;
+}
+
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background-color: #edf2f7;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background-color: #4299e1;
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #4a5568;
+}
+
+.chunksContainer {
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+  padding: 0.5rem 0;
+}
+
+.chunksTrack {
+  display: flex;
+  gap: 0.5rem;
+  transition: transform 0.3s ease;
+  padding: 0 0.5rem;
+}
+
+.chunk {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: white;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.ellipsis {
+  flex-shrink: 0;
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4a5568;
+  font-size: 1.2rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+  margin: 0 0.5rem;
+}
+
+.chunk.lastChunk {
+  position: sticky;
+  right: 0;
+  margin-right: 0.5rem;
+  background-color: #2d3748;
+  border: 2px solid #4299e1;
+  margin-left: 0.5rem;
+}
+
+.chunk.lastChunk::after {
+  content: "Total";
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: #4a5568;
+  white-space: nowrap;
+}
+
+.pending {
+  background-color: #718096;
+  border: 1px solid #4a5568;
+}
+
+.uploading {
+  background-color: #4299e1;
+  animation: pulse 1.5s infinite;
+}
+
+.completed {
+  background-color: #48bb78;
+  transform: scale(0.9);
+}
+
+.error {
+  background-color: #f56565;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

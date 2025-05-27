@@ -7,7 +7,7 @@ import asyncio
 from functools import partial
 import time
 import uuid
-from typing import Optional
+from typing import Optional, Dict
 
 class WasabiStorageService:
     def __init__(self):
@@ -245,16 +245,21 @@ class WasabiStorageService:
             return '.' + filename.split('.')[-1].lower()
         return '.mp4'  # Default extension
 
-    async def delete_video(self, file_url: str) -> bool:
+    async def delete_video(self, file_url_or_key: str) -> bool:
         """
-        Delete a video file from Wasabi given its URL
+        Delete a video file from Wasabi given its URL or file key
         """
         try:
-            # Extract key from URL
-            key = self._extract_key_from_url(file_url)
-            if not key:
-                print(f"[WASABI] Could not extract key from URL: {file_url}")
-                return False
+            # Check if it's a file key (doesn't contain http) or URL
+            if file_url_or_key.startswith('http'):
+                # Extract key from URL
+                key = self._extract_key_from_url(file_url_or_key)
+                if not key:
+                    print(f"[WASABI] Could not extract key from URL: {file_url_or_key}")
+                    return False
+            else:
+                # Assume it's already a file key
+                key = file_url_or_key
             
             print(f"[WASABI] Deleting file: {key}")
             
@@ -272,6 +277,28 @@ class WasabiStorageService:
             
         except Exception as e:
             print(f"[WASABI] Error deleting file: {str(e)}")
+            return False
+
+    async def delete_file_by_key(self, file_key: str) -> bool:
+        """
+        Delete a file from Wasabi by its key (path in bucket)
+        """
+        try:
+            print(f"[WASABI] Deleting file by key: {file_key}")
+            
+            loop = asyncio.get_event_loop()
+            delete_func = partial(
+                self.s3_client.delete_object,
+                Bucket=self.bucket_name,
+                Key=file_key
+            )
+            
+            await loop.run_in_executor(None, delete_func)
+            print(f"[WASABI] Successfully deleted file: {file_key}")
+            return True
+            
+        except Exception as e:
+            print(f"[WASABI] Error deleting file by key {file_key}: {str(e)}")
             return False
 
     def _extract_key_from_url(self, url: str) -> Optional[str]:
@@ -370,6 +397,127 @@ class WasabiStorageService:
             print(f"[WASABI] Error generating multiple URLs: {str(e)}")
             # Return fallback mapping
             return {key: key for key in file_keys}
+
+    async def create_multipart_upload(self, file_key: str, content_type: str) -> dict:
+        """
+        Initiate a multipart upload and return the upload ID
+        """
+        try:
+            print(f"[WASABI] Initiating multipart upload for {file_key}")
+            
+            loop = asyncio.get_event_loop()
+            create_func = partial(
+                self.s3_client.create_multipart_upload,
+                Bucket=self.bucket_name,
+                Key=file_key,
+                ContentType=content_type or 'video/mp4'
+            )
+            
+            response = await loop.run_in_executor(None, create_func)
+            print(f"[WASABI] Multipart upload initiated with ID: {response['UploadId']}")
+            
+            return response
+            
+        except Exception as e:
+            print(f"[WASABI] Error initiating multipart upload: {str(e)}")
+            raise Exception(f"Failed to initiate multipart upload: {str(e)}")
+
+    async def get_chunk_upload_urls(self, file_key: str, upload_id: str, total_chunks: int) -> Dict[int, str]:
+        """
+        Generate presigned URLs for uploading each chunk
+        """
+        try:
+            print(f"[WASABI] Generating presigned URLs for {total_chunks} chunks")
+            
+            urls = {}
+            loop = asyncio.get_event_loop()
+            
+            for chunk_number in range(1, total_chunks + 1):
+                url_func = partial(
+                    self.s3_client.generate_presigned_url,
+                    'upload_part',
+                    Params={
+                        'Bucket': self.bucket_name,
+                        'Key': file_key,
+                        'UploadId': upload_id,
+                        'PartNumber': chunk_number
+                    },
+                    ExpiresIn=3600  # URL valid for 1 hour
+                )
+                
+                presigned_url = await loop.run_in_executor(None, url_func)
+                urls[chunk_number] = presigned_url
+            
+            print(f"[WASABI] Generated {len(urls)} presigned URLs")
+            return urls
+            
+        except Exception as e:
+            print(f"[WASABI] Error generating chunk upload URLs: {str(e)}")
+            raise Exception(f"Failed to generate chunk upload URLs: {str(e)}")
+
+    async def complete_multipart_upload(self, file_key: str, upload_id: str, etags: Dict[int, str]) -> str:
+        """
+        Complete a multipart upload with the ETags from all chunks
+        """
+        try:
+            print(f"[WASABI] Completing multipart upload for {file_key}")
+            print(f"[WASABI] ETags received: {etags}")
+            
+            # Prepare parts list in correct order
+            parts = []
+            for part_num in sorted(etags.keys()):
+                etag = etags[part_num]
+                # Add quotes back if they're not present
+                if not etag.startswith('"'):
+                    etag = f'"{etag}"'
+                if not etag.endswith('"'):
+                    etag = f'{etag}"'
+                parts.append({
+                    'ETag': etag,
+                    'PartNumber': part_num
+                })
+            
+            print(f"[WASABI] Parts prepared: {parts}")
+            
+            loop = asyncio.get_event_loop()
+            complete_func = partial(
+                self.s3_client.complete_multipart_upload,
+                Bucket=self.bucket_name,
+                Key=file_key,
+                UploadId=upload_id,
+                MultipartUpload={'Parts': parts}
+            )
+            
+            await loop.run_in_executor(None, complete_func)
+            print(f"[WASABI] Multipart upload completed successfully")
+            
+            return file_key
+            
+        except Exception as e:
+            print(f"[WASABI] Error completing multipart upload: {str(e)}")
+            raise Exception(f"Failed to complete multipart upload: {str(e)}")
+
+    async def abort_multipart_upload(self, file_key: str, upload_id: str):
+        """
+        Abort a multipart upload and clean up any uploaded parts
+        """
+        try:
+            print(f"[WASABI] Aborting multipart upload for {file_key}")
+            
+            loop = asyncio.get_event_loop()
+            abort_func = partial(
+                self.s3_client.abort_multipart_upload,
+                Bucket=self.bucket_name,
+                Key=file_key,
+                UploadId=upload_id
+            )
+            
+            await loop.run_in_executor(None, abort_func)
+            print(f"[WASABI] Multipart upload aborted successfully")
+            
+        except Exception as e:
+            print(f"[WASABI] Error aborting multipart upload: {str(e)}")
+            raise Exception(f"Failed to abort multipart upload: {str(e)}")
 
 # Global instance
 wasabi_storage = WasabiStorageService() 

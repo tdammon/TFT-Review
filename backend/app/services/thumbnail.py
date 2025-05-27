@@ -57,6 +57,13 @@ async def generate_thumbnail_from_file(video_file: UploadFile) -> Optional[str]:
                         break
                     f.write(chunk)
             
+            # Reset file pointer for any subsequent operations
+            try:
+                await video_file.seek(0)
+            except Exception as e:
+                print(f"[THUMBNAIL] Warning: Could not reset file pointer: {e}")
+                # Continue anyway, as the temp file has the data we need
+            
             print(f"[THUMBNAIL] Extracting frame using FFmpeg...")
             
             # Extract frame at 1 second using FFmpeg
@@ -114,8 +121,91 @@ async def generate_thumbnail_from_file(video_file: UploadFile) -> Optional[str]:
         return None
     
     finally:
-        # Reset video file pointer
+        # Reset video file pointer if possible
         try:
             await video_file.seek(0)
-        except:
-            pass 
+        except Exception as e:
+            print(f"[THUMBNAIL] Warning: Could not reset file pointer in finally block: {e}")
+            # This is not critical, just log and continue
+
+async def generate_thumbnail_from_file_key(file_key: str) -> Optional[str]:
+    """
+    Generate thumbnail from a video file stored in Wasabi.
+    Downloads the video temporarily, generates the thumbnail, and uploads it back to Wasabi.
+    """
+    try:
+        print(f"[THUMBNAIL] Starting thumbnail generation for file key: {file_key}")
+        
+        # Create temporary files
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_video:
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_thumb:
+                temp_video_path = temp_video.name
+                temp_thumb_path = temp_thumb.name
+        
+        try:
+            # Download video from Wasabi
+            print(f"[THUMBNAIL] Downloading video from Wasabi...")
+            loop = asyncio.get_event_loop()
+            download_func = partial(
+                wasabi_storage.s3_client.download_file,
+                wasabi_storage.bucket_name,
+                file_key,
+                temp_video_path
+            )
+            await loop.run_in_executor(None, download_func)
+            
+            print(f"[THUMBNAIL] Extracting frame using FFmpeg...")
+            
+            # Extract frame at 1 second using FFmpeg
+            extract_func = partial(
+                ffmpeg.input(temp_video_path, ss=1)
+                .output(temp_thumb_path, vframes=1, format='image2', vcodec='mjpeg')
+                .overwrite_output()
+                .run,
+                quiet=True
+            )
+            
+            await loop.run_in_executor(None, extract_func)
+            
+            # Check if thumbnail was created
+            if not os.path.exists(temp_thumb_path) or os.path.getsize(temp_thumb_path) == 0:
+                print(f"[THUMBNAIL] Failed to extract frame")
+                return None
+            
+            print(f"[THUMBNAIL] Frame extracted, uploading to Wasabi...")
+            
+            # Upload thumbnail to Wasabi
+            thumbnail_key = f"thumbnails/{uuid.uuid4()}.jpg"
+            
+            # Create a file-like object for upload
+            with open(temp_thumb_path, 'rb') as thumb_file:
+                upload_func = partial(
+                    wasabi_storage.s3_client.upload_fileobj,
+                    thumb_file,
+                    wasabi_storage.bucket_name,
+                    thumbnail_key,
+                    ExtraArgs={
+                        'ContentType': 'image/jpeg'
+                    }
+                )
+                
+                await loop.run_in_executor(None, upload_func)
+            
+            print(f"[THUMBNAIL] Thumbnail uploaded successfully, returning key: {thumbnail_key}")
+            return thumbnail_key
+            
+        finally:
+            # Clean up temporary files
+            try:
+                if os.path.exists(temp_video_path):
+                    os.unlink(temp_video_path)
+                if os.path.exists(temp_thumb_path):
+                    os.unlink(temp_thumb_path)
+            except:
+                pass
+                
+    except Exception as e:
+        print(f"[THUMBNAIL] Error generating thumbnail from file key: {str(e)}")
+        import traceback
+        print(f"[THUMBNAIL] Traceback: {traceback.format_exc()}")
+        return None 

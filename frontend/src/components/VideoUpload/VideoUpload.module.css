@@ -339,3 +339,62 @@
     width: 100%;
   }
 }
+
+.chunkProgress {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.chunkProgress h4 {
+  margin: 0 0 1rem 0;
+  color: #ccc;
+}
+
+.chunkGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 0.5rem;
+}
+
+.chunkItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: white;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.chunkItem.pending {
+  background: #333;
+}
+
+.chunkItem.uploading {
+  background: #2c5282;
+  animation: pulse 1s infinite;
+}
+
+.chunkItem.completed {
+  background: #2f855a;
+}
+
+.chunkItem.error {
+  background: #c53030;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}

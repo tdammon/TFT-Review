@@ -1,11 +1,12 @@
 from pydantic import BaseModel, Field, HttpUrl, validator, model_validator
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from enum import Enum
 import uuid
 import re
 from .comment import CommentResponse
 from .event import EventResponse
+from ..models.video import VideoVisibility
 
 class VideoVisibility(str, Enum):
     PUBLIC = "public"
@@ -86,3 +87,32 @@ class VideoDetailResponse(VideoResponse):
 
     class Config:
         from_attributes = True
+
+class ChunkedUploadInit(BaseModel):
+    """Request body for initiating a chunked upload"""
+    filename: str
+    content_type: str
+    total_size: int
+    chunk_size: int = 5 * 1024 * 1024  # Default 5MB chunks
+
+class ChunkedUploadInitResponse(BaseModel):
+    """Response for chunked upload initiation"""
+    upload_id: str
+    chunk_size: int
+    total_chunks: int
+    presigned_urls: Dict[int, str]  # chunk_number -> presigned_url
+
+class ChunkedUploadComplete(BaseModel):
+    """Request body for completing a chunked upload"""
+    upload_id: str
+    total_chunks: int
+    etags: Dict[int, str]  # chunk_number -> ETag
+
+class ChunkedUploadStatus(BaseModel):
+    """Response for upload status"""
+    upload_id: str
+    status: str
+    progress: float
+    uploaded_chunks: List[int]
+    remaining_chunks: List[int]
+    error: Optional[str] = None
